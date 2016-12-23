@@ -91,6 +91,14 @@ end
 if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
    Misc.costfun='Exc';
 end
+% Clutched spring for ankle plantarflexion (Collins 2015)
+if ~isfield(Misc, 'ankle_clutched_spring') || isempty(Misc.ankle_clutched_spring)
+    Misc.ankle_clutched_spring = false;
+end
+
+if Misc.ankle_clutched_spring && ~strcmp(Misc.costfun, 'Exc_Act')
+    error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+end
 
 % ------------------------------------------------------------------------%
 % Compute ID -------------------------------------------------------------%
@@ -159,6 +167,12 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
 
+auxdata.ankle_clutched_spring = Misc.ankle_clutched_spring;
+if Misc.ankle_clutched_spring
+    % TODO support separately clutching left and right leg.
+    auxdata.clutched_spring_dofs = strmatch('ankle_angle', DatStore.DOFNames);
+end
+
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
 for i = 1:auxdata.Ndof
     auxdata.MA(i).Joint(:,:) = DatStore.dM(:,i,:);  % moment arms
@@ -215,6 +229,11 @@ HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
 bounds.phase.path.lower = [ID_bounds,HillEquil]; bounds.phase.path.upper = [ID_bounds,HillEquil];
 
+if Misc.ankle_clutched_spring
+    bounds.parameter.lower = [0];
+    bounds.parameter.upper = [1];
+end
+
 % Eventgroup
 % Impose mild periodicity
 pera_lower = -1 * ones(1, auxdata.NMuscles); pera_upper = 1 * ones(1, auxdata.NMuscles);
@@ -226,6 +245,9 @@ N = length(DatStore.time);
 guess.phase.time = DatStore.time;
 guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
 guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
+if Misc.ankle_clutched_spring
+    guess.parameter = [0.5];
+end
 guess.phase.integral = 0;
 
 % Spline structures
