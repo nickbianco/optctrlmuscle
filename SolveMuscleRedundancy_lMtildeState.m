@@ -234,6 +234,7 @@ for dof = 1:auxdata.Ndof
         auxdata.JointMASpline(dof).Muscle(m) = spline(DatStore.time,auxdata.MA(dof).Joint(:,m));       
     end
     auxdata.JointIDSpline(dof) = spline(DatStore.time,DatStore.T_exp(:,dof));
+    auxdata.JointIKSpline(dof) = spline(DatStore.time,DatStore.q_exp(:,dof));
 end
 
 for m = 1:auxdata.NMuscles
