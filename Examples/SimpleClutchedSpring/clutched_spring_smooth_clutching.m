@@ -1,28 +1,35 @@
-function output = spring()
-% Solve for the spring stiffness that moves a point mass from x = -1 to x = 1
-% in the given amount of time. This is not an optimal control problem; there is
-% only one solution (it is a boundary value problem). As such, there is no
-% objective function.
+function output = clutched_spring_smooth_clutching()
+% DOES NOT WORK (YET).
+% (Read the description of clutched_spring_with_phases.m first) In this
+% formulation, we use an additional control variable to keep track of the rest
+% length (actually, the stretch) for the clutched spring, and a control
+% continuous control variable to dictate when the clutch is engaged or not
+% engaged.
+% Note that we DO get the solution we expect if we set control_lower to 1 (so
+% that the spring is just a normal spring; "always clutched").
 
 auxdata.m = 10;
-
-% The correct answer for the spring stiffness parameter.
-k_answer = 5;
+auxdata.g = 10;
+auxdata.logistic_steepness = 30;
+auxdata.stretch_decay_time_const = 0.010;
 
 %-------------------------------------------------------------------------%
 %----------------- Provide All Bounds for Problem ------------------------%
 %-------------------------------------------------------------------------%
 t0 = 0;
-% Period of oscillation.
-period = 2 * pi * sqrt(auxdata.m / k_answer);
-% We simulate half a period (x = -1 to 1).
-tf = 0.5 * period;
+tf = 5;
 
-initialstate = [-1 0];
-finalstate = [1 0];
+% First state, x: the depth of the mass (x increases downwards).
+% Second state, u: rate of change of depth of the mass.
+initialstate = [0 0 0];
+finalstate = [0 0 0];
 
-state_lower = [-2 -10];
-state_upper = [2 10];
+state_lower = [-5 -100 -50];
+state_upper = [2000 100 50];
+
+% Is the clutch on or off?
+control_lower = [0];
+control_upper = [1];
 
 %-------------------------------------------------------------------------%
 %----------------------- Setup for Problem Bounds ------------------------%
@@ -37,18 +44,28 @@ bounds.phase.state.lower = state_lower;
 bounds.phase.state.upper = state_upper;
 bounds.phase.finalstate.lower = finalstate;
 bounds.phase.finalstate.upper = finalstate;
+bounds.phase.control.lower = control_lower;
+bounds.phase.control.upper = control_upper;
+
+% The only parameter is the spring stiffness.
 bounds.parameter.lower = [0];
-bounds.parameter.upper = [10];
+bounds.parameter.upper = [100];
+bounds.phase.integral.lower = -1000;
+bounds.phase.integral.upper = 0;
 
 %-------------------------------------------------------------------------%
 %---------------------- Provide Guess of Solution ------------------------%
 %-------------------------------------------------------------------------%
-t_guess             = [t0; tf];
-
-state_guess = [state_lower; state_upper];
-
-guess.phase.state   = state_guess;
-guess.phase.time    = [t_guess];
+guess.phase.time    = linspace(t0, tf, 4)';
+guess.phase.state   = [0, 0, 0;
+                       1, 1, 0;
+                       1, -1, 0;
+                       0, 0, 0];
+guess.phase.control = [0;
+                       1;
+                       1;
+                       0];
+guess.phase.integral = -1;
 guess.parameter = [8];
 
 %-------------------------------------------------------------------------%
@@ -56,7 +73,7 @@ guess.parameter = [8];
 %-------------------------------------------------------------------------%
 mesh.method          = 'hp-PattersonRao';
 mesh.tolerance       = 1e-5;
-mesh.maxiterations   = 10;
+mesh.maxiterations   = 5; 
 mesh.colpointsmin    = 3;
 mesh.colpointsmax    = 10;
 N                    = 10;
@@ -86,7 +103,17 @@ setup.scales.method                   = 'automatic-guess';
 %-------------------------------------------------------------------------%
 %----------------------- Solve Problem Using GPOPS2 ----------------------%
 %-------------------------------------------------------------------------%
+gpopsVerifySetup(setup);
 output = gpops2(setup);
+figure;
+hold on;
+sol = output.result.solution;
+subplot(2, 1, 1);
+plot(sol.phase.time, -sol.phase.state(:, 1));
+subplot(2, 1, 2);
+plot(sol.phase.time, sol.phase.control(:, 1));
+
+fprintf('Spring stiffness: %d\n', sol.parameter(1));
 end
 
 function phaseout = continuous(input)
@@ -105,13 +132,34 @@ function phaseout = continuous(input)
 % phaseout(phasenumber).integrand
 
 m = input.auxdata.m;
+g = input.auxdata.g;
+logistic_steep = input.auxdata.logistic_steepness;
+decay = input.auxdata.stretch_decay_time_const;
 x = input.phase.state(:, 1);
 u = input.phase.state(:, 2);
+stretch = input.phase.state(:, 3);
+clutch = input.phase.control(:, 1);
 %% GPOPS provides the same parameter for each time point (size(k) = N x 1), 
 %% for numerical efficiency reasons.
-k = input.phase.parameter;
+k = input.phase.parameter(:, 1);
 
-phaseout.dynamics = [u, -k .* x / m];
+udot = g + 1 / m * -k .* stretch;
+
+%clutch = 
+N = length(input.phase.time);
+stretchdot = zeros(N, 1);
+for i = 1:N
+    if clutch(i) > 0.5
+        stretchdot(i) = u(i);
+    else
+        stretchdot(i) = - 1 / decay * stretch(i);
+    end
+end
+
+phaseout.dynamics = [u, udot, stretchdot];
+
+% The smallest penalty is for clutch = 1 and clutch = 0.
+phaseout.integrand = -(clutch - 0.5).^2;
 
 end
 
@@ -132,8 +180,8 @@ function output = endpoint(input)
 % output.objective -- scalar
 % output.eventgroup(eventnumber).event -- row
 
-%output.objective = 0;
-% GPOPS seems to require that I give an actual objective function.
-output.objective = input.phase.finaltime;
+% Arbitrary objective function (for now).
+% Penalize clutch so that it is either 0 or 1.
+output.objective = input.phase.integral; %input.phase.finaltime;
 
 end

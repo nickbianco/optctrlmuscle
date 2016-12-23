@@ -32,9 +32,6 @@ finalstate = [0 0];
 state_lower = [-5 -100];
 state_upper = [2000 100];
 
-%F_lower = -50;
-%F_upper = 50;
-
 %-------------------------------------------------------------------------%
 %----------------------- Setup for Problem Bounds ------------------------%
 %-------------------------------------------------------------------------%
@@ -108,7 +105,7 @@ guess.parameter = [8];
 %-------------------------------------------------------------------------%
 mesh.method          = 'hp-PattersonRao';
 mesh.tolerance       = 1e-5;
-mesh.maxiterations   = 10; % TODO 
+mesh.maxiterations   = 10;
 mesh.colpointsmin    = 3;
 mesh.colpointsmax    = 10;
 N                    = 10;
