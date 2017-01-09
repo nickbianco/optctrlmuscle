@@ -18,6 +18,7 @@ state = OptInfo.result.solution.phase.state;
 deviceIndices = strmatch('ankle_angle', DatStore.DOFNames);
 assert(length(deviceIndices) == 1);
 
+figure;
 for idof = 1:numDOFs
     subplot(numDOFs, 1, idof);
     hold on;

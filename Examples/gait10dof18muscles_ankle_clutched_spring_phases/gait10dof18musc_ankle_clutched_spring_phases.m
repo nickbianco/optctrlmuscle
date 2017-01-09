@@ -1,6 +1,6 @@
 %% Example
 % add main folder and subfolder to matlab path (installation)
-filepath=which('gait10dof18musc_ankle_clutched_spring.m');
+filepath=which('gait10dof18musc_ankle_clutched_spring_phases.m');
 [DirExample,~,~]=fileparts(filepath);
 [DirExample2,~,~]=fileparts(DirExample);
 [MainDir,~]=fileparts(DirExample2);
@@ -24,6 +24,7 @@ Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 
 Misc.costfun = 'Exc_Act';
 Misc.ankle_clutched_spring = true;
+%Misc.phase_boundary = 1.1;
 
 %% Solve the problem
 [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);

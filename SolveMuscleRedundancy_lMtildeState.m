@@ -95,9 +95,21 @@ end
 if ~isfield(Misc, 'ankle_clutched_spring') || isempty(Misc.ankle_clutched_spring)
     Misc.ankle_clutched_spring = false;
 end
+if ~isfield(Misc, 'phase_boundary') || isempty(Misc.phase_boundary)
+    Misc.phase_boundary = NaN;
+end
 
 if Misc.ankle_clutched_spring && ~strcmp(Misc.costfun, 'Exc_Act')
     error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+end
+if ~isnan(Misc.phase_boundary)
+    assert(Misc.ankle_clutched_spring);
+    boundary = Misc.phase_boundary;
+    assert(time(1) < boundary);
+    assert(boundary < time(2));
+    numPhases = 2;
+else
+    numPhases = 1;
 end
 
 % ------------------------------------------------------------------------%
@@ -206,32 +218,62 @@ lMtilde_min = 0.2; lMtilde_max = 1.8;   % bounds on normalized muscle fiber leng
 
 % Time bounds
 t0 = DatStore.time(1); tf = DatStore.time(end);
-bounds.phase.initialtime.lower = t0; bounds.phase.initialtime.upper = t0;
-bounds.phase.finaltime.lower = tf; bounds.phase.finaltime.upper = tf;
+if numPhases == 1
+    bounds.phase.initialtime.lower = t0; bounds.phase.initialtime.upper = t0;
+    bounds.phase.finaltime.lower = tf; bounds.phase.finaltime.upper = tf;
+elseif numPhases == 2
+    bounds.phase(1).initialtime.lower = t0;
+    bounds.phase(1).initialtime.upper = t0;
+    bounds.phase(1).finaltime.lower = Misc.phase_boundary;
+    bounds.phase(1).finaltime.upper = Misc.phase_boundary;
+    bounds.phase(2).initialtime.lower = Misc.phase_boundary;
+    bounds.phase(2).initialtime.upper = Misc.phase_boundary;
+    bounds.phase(2).finaltime.lower = tf;
+    bounds.phase(2).finaltime.upper = tf;
+end
 auxdata.initialtime = t0;
 auxdata.finaltime = tf;
 % Controls bounds
-umin = e_min*ones(1,auxdata.NMuscles); umax = e_max*ones(1,auxdata.NMuscles);
-vMtildemin = vMtilde_min*ones(1,auxdata.NMuscles); vMtildemax = vMtilde_max*ones(1,auxdata.NMuscles);
-aTmin = -1*ones(1,auxdata.Ndof); aTmax = 1*ones(1,auxdata.Ndof);
-bounds.phase.control.lower = [umin aTmin vMtildemin]; bounds.phase.control.upper = [umax aTmax vMtildemax];
+umin = e_min*ones(1,auxdata.NMuscles);
+umax = e_max*ones(1,auxdata.NMuscles);
+vMtildemin = vMtilde_min*ones(1,auxdata.NMuscles);
+vMtildemax = vMtilde_max*ones(1,auxdata.NMuscles);
+aTmin = -1*ones(1,auxdata.Ndof);
+aTmax = 1*ones(1,auxdata.Ndof);
+for ip = 1:numPhases
+    bounds.phase(ip).control.lower = [umin aTmin vMtildemin];
+    bounds.phase(ip).control.upper = [umax aTmax vMtildemax];
+end
 % States bunds
-actMin = a_min*ones(1,auxdata.NMuscles); actMax = a_max*ones(1,auxdata.NMuscles);
-lMtildemin = lMtilde_min*ones(1,auxdata.NMuscles); lMtildemax = lMtilde_max*ones(1,auxdata.NMuscles);
-bounds.phase.initialstate.lower = [actMin, lMtildemin]; bounds.phase.initialstate.upper = [actMax, lMtildemax];
-bounds.phase.state.lower = [actMin, lMtildemin]; bounds.phase.state.upper = [actMax, lMtildemax];
-bounds.phase.finalstate.lower = [actMin, lMtildemin]; bounds.phase.finalstate.upper = [actMax, lMtildemax];
+actMin = a_min*ones(1,auxdata.NMuscles);
+actMax = a_max*ones(1,auxdata.NMuscles);
+lMtildemin = lMtilde_min*ones(1,auxdata.NMuscles);
+lMtildemax = lMtilde_max*ones(1,auxdata.NMuscles);
+for ip = 1:numPhases
+    bounds.phase(ip).initialstate.lower = [actMin, lMtildemin];
+    bounds.phase(ip).initialstate.upper = [actMax, lMtildemax];
+    bounds.phase(ip).state.lower = [actMin, lMtildemin];
+    bounds.phase(ip).state.upper = [actMax, lMtildemax];
+    bounds.phase(ip).finalstate.lower = [actMin, lMtildemin];
+    bounds.phase(ip).finalstate.upper = [actMax, lMtildemax];
+end
 % Integral bounds
-bounds.phase.integral.lower = 0; bounds.phase.integral.upper = 10000*(tf-t0);
+for ip = 1:numPhases
+    bounds.phase(ip).integral.lower = 0;
+    bounds.phase(ip).integral.upper = 10000*(tf-t0);
+end
 
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
-bounds.phase.path.lower = [ID_bounds,HillEquil]; bounds.phase.path.upper = [ID_bounds,HillEquil];
+for ip = 1:numPhases
+    bounds.phase(ip).path.lower = [ID_bounds,HillEquil];
+    bounds.phase(ip).path.upper = [ID_bounds,HillEquil];
+end
 
 if Misc.ankle_clutched_spring
-    bounds.parameter.lower = [0];
-    bounds.parameter.upper = [1];
+    bounds.parameter.lower = [0, -0.5];
+    bounds.parameter.upper = [1, 0.5];
 end
 
 % Eventgroup
@@ -246,7 +288,7 @@ guess.phase.time = DatStore.time;
 guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
 guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
 if Misc.ankle_clutched_spring
-    guess.parameter = [0.5];
+    guess.parameter = [0.5, 0];
 end
 guess.phase.integral = 0;
 
