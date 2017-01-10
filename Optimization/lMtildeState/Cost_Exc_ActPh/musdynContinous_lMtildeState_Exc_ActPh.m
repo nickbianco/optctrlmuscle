@@ -42,7 +42,8 @@ for ip = 1:length(input.phase)
         T_exp=splinestruct.phase(ip).ID(:,dof);
         index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
         T_sim=sum(F.*splinestruct.phase(ip).MA(:,index_sel),2) + Topt*aT(:,dof);
-        if input.auxdata.ankle_clutched_spring
+        % TODO more flexible way of specifying which phases contain the spring.
+        if input.auxdata.ankle_clutched_spring && ip == 1
             % TODO phase-dependent.
             if any(dof == input.auxdata.clutched_spring_dofs)
                 ankleAngle = -(splinestruct.phase(ip).IK(:,dof) - springRestLength);

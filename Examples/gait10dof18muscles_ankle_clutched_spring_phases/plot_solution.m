@@ -33,7 +33,7 @@ for idof = 1:numDOFs
          maxSpringStiff = 400; % N-m/rad.
          rest_angle = OptInfo.result.solution.parameter(2);
          ankleAngle = -(jointAngles(:, idof) - rest_angle);
-         deviceMoment = maxSpringStiff * normSpringStiff .* ankleAngle;
+         deviceMoment = (Time < Misc.phase_boundary) .* maxSpringStiff * normSpringStiff .* ankleAngle;
          plot(Time, deviceMoment);
          legendEntries = [legendEntries {'device'}];
          sumMoment = sumMoment + deviceMoment;
