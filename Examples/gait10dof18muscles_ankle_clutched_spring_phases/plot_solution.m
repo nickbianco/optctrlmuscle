@@ -1,18 +1,12 @@
 numDOFs = DatStore.nDOF;
 numMuscles = DatStore.nMuscles;
 
-time = OptInfo.result.solution.phase.time;
-
 % Extract experimental data.
 expTime = DatStore.time;
 qExp = DatStore.q_exp;
 momArmsExp = DatStore.dM;
-momArms = interp1(expTime, momArmsExp, time);
-jointAngles = pi / 180. * interp1(expTime, qExp, time);
-
-% Extract parts of the solution related to the device.
-control = OptInfo.result.solution.phase.control;
-state = OptInfo.result.solution.phase.state;
+momArms = interp1(expTime, momArmsExp, Time);
+jointAngles = pi / 180. * interp1(expTime, qExp, Time);
 
 % Joint moment breakdown.
 deviceIndices = strmatch('ankle_angle', DatStore.DOFNames);
@@ -28,7 +22,7 @@ for idof = 1:numDOFs
     for imusc = 1:numMuscles
         if any(momArms(:, idof, imusc)) > 0.00001
             thisMoment = TForce(:, imusc) .* momArms(:, idof, imusc);
-            plot(time(1:end-1), thisMoment(1:end-1));
+            plot(Time(1:end-1), thisMoment(1:end-1));
             legendEntries = [legendEntries {MuscleNames{imusc}}];
             sumMoment = sumMoment + thisMoment;
         end
@@ -40,11 +34,11 @@ for idof = 1:numDOFs
          rest_angle = OptInfo.result.solution.parameter(2);
          ankleAngle = -(jointAngles(:, idof) - rest_angle);
          deviceMoment = maxSpringStiff * normSpringStiff .* ankleAngle;
-         plot(time, deviceMoment);
+         plot(Time, deviceMoment);
          legendEntries = [legendEntries {'device'}];
          sumMoment = sumMoment + deviceMoment;
      end
-    plot(time(1:end-1), sumMoment(1:end-1), 'r', 'LineWidth', 2);
+    plot(Time(1:end-1), sumMoment(1:end-1), 'r', 'LineWidth', 2);
     legendEntries = [legendEntries {'sum'}];
     legend(legendEntries, 'Interpreter', 'none');
     title(DatStore.DOFNames{idof}, 'Interpreter', 'none');
@@ -53,6 +47,10 @@ for idof = 1:numDOFs
     end
     ylabel('moment (N-m)');
 end
+
+fprintf('Optimal stiffness (dimensionless): %f\n', normSpringStiff);
+fprintf('Optimal stiffness: %f N-m/rad\n', maxSpringStiff * normSpringStiff);
+fprintf('Optimal rest length: %f degrees\n', rest_angle);
 
 % TODO percent reduction in metabolic cost / sum squared activation and
 % squared excitation.

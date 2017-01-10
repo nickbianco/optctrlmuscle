@@ -108,6 +108,7 @@ if ~isnan(Misc.phase_boundary)
     assert(time(1) < boundary);
     assert(boundary < time(2));
     numPhases = 2;
+    Misc.costfun = 'Exc_ActPh';
 else
     numPhases = 1;
 end
@@ -230,6 +231,8 @@ elseif numPhases == 2
     bounds.phase(2).initialtime.upper = Misc.phase_boundary;
     bounds.phase(2).finaltime.lower = tf;
     bounds.phase(2).finaltime.upper = tf;
+else
+    error('Invalid numPhases');
 end
 auxdata.initialtime = t0;
 auxdata.finaltime = tf;
@@ -278,19 +281,52 @@ end
 
 % Eventgroup
 % Impose mild periodicity
-pera_lower = -1 * ones(1, auxdata.NMuscles); pera_upper = 1 * ones(1, auxdata.NMuscles);
-perlMtilde_lower = -1*ones(1,auxdata.NMuscles); perlMtilde_upper = 1*ones(1,auxdata.NMuscles);
-bounds.eventgroup.lower = [pera_lower perlMtilde_lower]; bounds.eventgroup.upper = [pera_upper perlMtilde_upper];
+pera_lower = -1 * ones(1, auxdata.NMuscles);
+pera_upper = 1 * ones(1, auxdata.NMuscles);
+perlMtilde_lower = -1*ones(1,auxdata.NMuscles);
+perlMtilde_upper = 1*ones(1,auxdata.NMuscles);
+bounds.eventgroup(1).lower = [pera_lower perlMtilde_lower]; 
+bounds.eventgroup(1).upper = [pera_upper perlMtilde_upper];
+if numPhases <= 2
+    states_continuous = ...
+            zeros(1, length(bounds.phase(1).state.lower));
+            %+ ...
+                     %length(bounds.phase(1).control.lower));
+    bounds.eventgroup(2).lower = [states_continuous]; 
+    bounds.eventgroup(2).upper = [states_continuous];
+else
+    error('Invalid numPhases.');
+end
 
 % Initial guess
 N = length(DatStore.time);
-guess.phase.time = DatStore.time;
-guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
-guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
+if numPhases == 1
+    guess.phase.time = DatStore.time;
+    guess.phase.control = [DatStore.SoAct ...
+                           DatStore.SoRAct./150 ...
+                           0.01*ones(N,auxdata.NMuscles)];
+    guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
+    guess.phase.integral = 0;
+elseif numPhases == 2
+    phase1_indices = find(DatStore.time < Misc.phase_boundary);
+    phase2_indices = find(DatStore.time >= Misc.phase_boundary);
+    assert(length(phase1_indices) + length(phase2_indices) == N);
+    phase_indices = {phase1_indices, phase2_indices};
+    for ip = 1:numPhases
+        idxs = phase_indices{ip};
+        guess.phase(ip).time = DatStore.time(idxs);
+        guess.phase(ip).control = [DatStore.SoAct(idxs, :) ...
+                                   DatStore.SoRAct(idxs, :)./150 ...
+                                   0.01*ones(length(idxs),auxdata.NMuscles)];
+        guess.phase(ip).state =  [DatStore.SoAct(idxs, :) ones(length(idxs),auxdata.NMuscles)];
+        guess.phase(ip).integral = 0;
+    end
+else
+    error('Invalid numPhases');
+end
 if Misc.ankle_clutched_spring
     guess.parameter = [0.5, 0];
 end
-guess.phase.integral = 0;
 
 % Spline structures
 for dof = 1:auxdata.Ndof
@@ -324,22 +360,46 @@ setup.mesh.colpointsmin = 3;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
 setup.displaylevel = 2;
-NMeshIntervals = round((tf-t0)*Misc.Mesh_Frequency);
-setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
-setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
+if numPhases == 1
+    phaseDurations = {tf - t0};
+elseif numPhases == 2
+    phaseDurations = {Misc.phase_boundary - t0, tf - Misc.phase_boundary};
+else
+    error('Invalid numPhases.');
+end
+for ip = 1:numPhases
+    NMeshIntervals = round(phaseDurations{ip} * Misc.Mesh_Frequency);
+    setup.mesh.phase(ip).colpoints = 3*ones(1,NMeshIntervals);
+    setup.mesh.phase(ip).fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
+end
 setup.functions.continuous = str2func(['musdynContinous_lMtildeState_' Misc.costfun]);
 setup.functions.endpoint = str2func(['musdynEndpoint_lMtildeState_' Misc.costfun]);
     
 % ADiGator setup
 persistent splinestruct
 input.auxdata = auxdata;
-tdummy = guess.phase.time;
-splinestruct = SplineInputData(tdummy,input);
-splinenames = fieldnames(splinestruct);
-for Scount = 1:length(splinenames)
-  secdim = size(splinestruct.(splinenames{Scount}),2);
-  splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
-  splinestruct.(splinenames{Scount}) = zeros(0,secdim);
+if numPhases == 1
+    tdummy = guess.phase.time;
+    splinestruct = SplineInputData(tdummy,input);
+    splinenames = fieldnames(splinestruct);
+    for Scount = 1:length(splinenames)
+      secdim = size(splinestruct.(splinenames{Scount}),2);
+      splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+      splinestruct.(splinenames{Scount}) = zeros(0,secdim);
+    end
+elseif numPhases == 2
+    for ip = 1:numPhases
+        tdummy = guess.phase(ip).time;
+        splinestruct.phase(ip) = SplineInputData(tdummy,input);
+        splinenames = fieldnames(splinestruct.phase(ip));
+        for Scount = 1:length(splinenames)
+          secdim = size(splinestruct.phase(ip).(splinenames{Scount}),2);
+          splinestructad.phase(ip).(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+          splinestruct.phase(ip).(splinenames{Scount}) = zeros(0,secdim);
+        end
+    end
+else
+    error('Invalid numPhases.');
 end
 setup.auxdata.splinestruct = splinestructad;
 adigatorGenFiles4gpops2(setup)
@@ -359,19 +419,39 @@ setup.adigatorhes.endpoint   = str2func(['musdynEndpoint_lMtildeState_' Misc.cos
 
 output = gpops2(setup);
 
-res=output.result.solution.phase(1);
-Time=res.time;
-MActivation=res.state(:,1:auxdata.NMuscles);
-lMtilde=res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
-lM=lMtilde.*(ones(length(Time),1)*DatStore.lOpt);
-MExcitation=res.control(:,1:auxdata.NMuscles);
-RActivation=res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
-MuscleNames=DatStore.MuscleNames;
-OptInfo=output;
+MuscleNames = DatStore.MuscleNames;
+Ntotal = 0;
+for ip = 1:numPhases
+    Ntotal = Ntotal + length(output.result.solution.phase(ip).time);
+end
+Time = zeros(Ntotal, 1);
+MActivation = zeros(Ntotal, auxdata.NMuscles);
+lMtilde = zeros(Ntotal, auxdata.NMuscles);
+lM = zeros(Ntotal, auxdata.NMuscles);
+MExcitation = zeros(Ntotal, auxdata.NMuscles);
+RActivation = zeros(Ntotal, auxdata.Ndof);
+TForcetilde = zeros(Ntotal, auxdata.NMuscles);
+TForce = zeros(Ntotal, auxdata.NMuscles);
+start_index = 1;
+for ip = 1:numPhases
+    idxs = start_index:(start_index-1+length(output.result.solution.phase(ip).time));
 
-% Tendon force from lMtilde
-% Interpolation lMT
-lMTinterp = interp1(DatStore.time,DatStore.LMT,Time);
-[TForcetilde,TForce] = TendonForce_lMtilde(lMtilde,auxdata.params,lMTinterp);
+    res = output.result.solution.phase(ip);
+    Time(idxs) = res.time;
+    MActivation(idxs, :) = res.state(:,1:auxdata.NMuscles);
+    lMtilde(idxs, :) = res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
+    lM(idxs, :) = lMtilde(idxs, :).*(ones(length(idxs),1)*DatStore.lOpt);
+    MExcitation(idxs, :) = res.control(:,1:auxdata.NMuscles);
+    RActivation(idxs, :) = res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
+    OptInfo = output;
+
+    % Tendon force from lMtilde
+    % Interpolation lMT
+    lMTinterp = interp1(DatStore.time,DatStore.LMT,Time(idxs));
+    [TForcetilde(idxs, :),TForce(idxs, :)] = TendonForce_lMtilde(...
+            lMtilde(idxs, :),auxdata.params,lMTinterp);
+    start_index = idxs(end) + 1;
+end
+
 end
 
