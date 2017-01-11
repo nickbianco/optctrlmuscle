@@ -20,8 +20,9 @@ lMtilde = input.phase.state(:,NMuscles+1:end);
 
 % Get parameters
 if input.auxdata.ankle_clutched_spring
-    % This actually has dimensions length(time) x 1.
-    normSpringStiff = input.phase.parameter;
+    % This actually has dimensions length(time) x 2.
+    normSpringStiff = input.phase.parameter(:, 1);
+    springRestAngle = input.phase.parameter(:, 2);
 end
 
 % PATH CONSTRAINTS
@@ -39,9 +40,7 @@ for dof = 1:Ndof
     T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     if input.auxdata.ankle_clutched_spring
         if any(dof == input.auxdata.clutched_spring_dofs)
-            % TODO add in the clutch and a proper rest length.
-            rest_angle = 0.0;
-            ankleAngle = -(splinestruct.IK(:,dof) - rest_angle);
+            ankleAngle = -(splinestruct.IK(:,dof) - springRestAngle);
             T_sim = T_sim + maxSpringStiff * normSpringStiff .* ankleAngle;
         end
     end

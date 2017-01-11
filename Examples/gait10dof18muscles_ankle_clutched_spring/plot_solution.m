@@ -11,10 +11,7 @@ expTime = DatStore.time;
 qExp = DatStore.q_exp;
 momArmsExp = DatStore.dM;
 momArms = interp1(expTime, momArmsExp, time);
-
-%for idof = 1:numDOFs
-%    qSpline(idof) = spline(expTime, pi / 180. * qExp(:, idof));
-%end
+jointAngles = pi / 180. * interp1(expTime, qExp, time);
 
 % Extract parts of the solution related to the device.
 control = OptInfo.result.solution.phase.control;
@@ -31,11 +28,10 @@ lMtilde = state(:,numMuscles+1:end);
 
 % Joint moment breakdown.
 deviceIndices = strmatch('ankle_angle', DatStore.DOFNames);
+assert(length(deviceIndices) == 1);
 
-Topt = 2*150.0;
 for idof = 1:numDOFs
-    %subplot(numDOFs, 1, idof);
-    figure;
+    subplot(numDOFs, 1, idof);
     hold on;
     plot(expTime, DatStore.T_exp(:, idof), 'k', 'LineWidth', 2);
     legendEntries = {'net'};
@@ -48,17 +44,25 @@ for idof = 1:numDOFs
             sumMoment = sumMoment + thisMoment;
         end
     end
-%     deviceIndex = find(deviceIndices == idof);
-%     if ~isempty(deviceIndex)
-%         deviceMoment = TODO;
-%         plot(time, deviceMoment);
-%         legendEntries = [legendEntries {'device'}];
-%         sumMoment = sumMoment + deviceMoment;
-%     end
+     deviceIndex = find(deviceIndices == idof);
+     if ~isempty(deviceIndex)
+         normSpringStiff = OptInfo.result.solution.parameter(1);
+         maxSpringStiff = 400; % N-m/rad.
+         rest_angle = OptInfo.result.solution.parameter(2);
+         ankleAngle = -(jointAngles(:, idof) - rest_angle);
+         deviceMoment = maxSpringStiff * normSpringStiff .* ankleAngle;
+         plot(time, deviceMoment);
+         legendEntries = [legendEntries {'device'}];
+         sumMoment = sumMoment + deviceMoment;
+     end
     plot(time(1:end-1), sumMoment(1:end-1), 'r', 'LineWidth', 2);
     legendEntries = [legendEntries {'sum'}];
     legend(legendEntries, 'Interpreter', 'none');
     title(DatStore.DOFNames{idof}, 'Interpreter', 'none');
+    if idof == numDOFs
+        xlabel('time (s)');
+    end
+    ylabel('moment (N-m)');
 end
 
 % Metabolic cost
