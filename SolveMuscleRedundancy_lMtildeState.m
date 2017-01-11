@@ -287,15 +287,13 @@ perlMtilde_lower = -1*ones(1,auxdata.NMuscles);
 perlMtilde_upper = 1*ones(1,auxdata.NMuscles);
 bounds.eventgroup(1).lower = [pera_lower perlMtilde_lower]; 
 bounds.eventgroup(1).upper = [pera_upper perlMtilde_upper];
-if numPhases <= 2
+if numPhases == 2
     states_continuous = ...
             zeros(1, length(bounds.phase(1).state.lower));
             %+ ...
                      %length(bounds.phase(1).control.lower));
     bounds.eventgroup(2).lower = [states_continuous]; 
     bounds.eventgroup(2).upper = [states_continuous];
-else
-    error('Invalid numPhases.');
 end
 
 % Initial guess
