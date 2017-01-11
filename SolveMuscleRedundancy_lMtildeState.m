@@ -119,7 +119,8 @@ if isempty(ID_path) || ~exist(ID_path,'file')
         [ID_outPath,ID_outName,ext]=fileparts(Misc.ID_ResultsPath);
         output_settings=fullfile(ID_outPath,[ID_outName '_settings.xml']);
         Opensim_ID(model_path,[time(1)-0.1 time(2)+0.1],Misc.Loads_path,IK_path,ID_outPath,[ID_outName ext],output_settings);
-        ID_path=Misc.ID_ResultsPath;
+        ID_path=Misc.ID_ResultsPath
+        keyboard
     end    
 end
 

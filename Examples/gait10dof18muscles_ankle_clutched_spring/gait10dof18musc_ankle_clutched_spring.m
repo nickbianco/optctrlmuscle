@@ -13,8 +13,8 @@ end
 Datapath = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait10dof18musc', ...
     'OutputReference');
 IK_path=fullfile(Datapath,'IK','subject01_walk_IK.mot');
-%ID_path=fullfile(Datapath,'ID','inversedynamics.sto');
-ID_path=[]; % compute ID from the external loads
+ID_path=fullfile(Datapath,'ID','inversedynamics.sto');
+%ID_path=[]; % compute ID from the external loads
 model_path=fullfile(Datapath,'subject01.osim');
 time=[0.7 1.4];     % Part of the right stance phase
 OutPath=fullfile(DirExample,'Results');
