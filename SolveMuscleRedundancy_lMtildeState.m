@@ -99,8 +99,11 @@ if ~isfield(Misc, 'phase_boundary') || isempty(Misc.phase_boundary)
     Misc.phase_boundary = NaN;
 end
 
-if Misc.ankle_clutched_spring && ~strcmp(Misc.costfun, 'Exc_Act')
-    error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+if Misc.ankle_clutched_spring 
+    if ~strcmp(Misc.costfun, 'Exc_Act')
+        error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+    end
+    Misc.costfun = 'Exc_ActSpr';
 end
 if ~isnan(Misc.phase_boundary)
     assert(Misc.ankle_clutched_spring);
@@ -132,7 +135,7 @@ if isempty(ID_path) || ~exist(ID_path,'file')
         [ID_outPath,ID_outName,ext]=fileparts(Misc.ID_ResultsPath);
         output_settings=fullfile(ID_outPath,[ID_outName '_settings.xml']);
         Opensim_ID(model_path,[time(1)-0.1 time(2)+0.1],Misc.Loads_path,IK_path,ID_outPath,[ID_outName ext],output_settings);
-        ID_path=Misc.ID_ResultsPath;
+        ID_path=[Misc.ID_ResultsPath '.sto'];
     end    
 end
 

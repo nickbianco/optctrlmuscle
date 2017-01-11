@@ -1,4 +1,4 @@
-function phaseout = musdynContinous_lMtildeState_Exc_Act(input)
+function phaseout = musdynContinous_lMtildeState_Exc_ActSpr(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -18,17 +18,32 @@ vMtilde = input.phase.control(:,NMuscles+Ndof+1:end);
 a       = input.phase.state(:,1:NMuscles);
 lMtilde = input.phase.state(:,NMuscles+1:end);
 
+% Get parameters
+if input.auxdata.ankle_clutched_spring
+    % This actually has dimensions length(time) x 2.
+    normSpringStiff = input.phase.parameter(:, 1);
+    springRestAngle = input.phase.parameter(:, 2);
+end
+
 % PATH CONSTRAINTS
 % Hill-equilibrium constraint
-[Hilldiff, F] = ForceEquilibrium_lMtildeState_Exc_Act(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff, F] = ForceEquilibrium_lMtildeState_Exc_ActSpr(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
+% Only used if ankle_clutched_spring == true.
+maxSpringStiff = 400; % N-m/rad.
 Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
     T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
+    if input.auxdata.ankle_clutched_spring
+        if any(dof == input.auxdata.clutched_spring_dofs)
+            ankleAngle = -(splinestruct.IK(:,dof) - springRestAngle);
+            T_sim = T_sim + maxSpringStiff * normSpringStiff .* ankleAngle;
+        end
+    end
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 
