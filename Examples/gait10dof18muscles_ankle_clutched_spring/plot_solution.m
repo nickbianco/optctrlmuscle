@@ -4,7 +4,9 @@ numDOFs = DatStore.nDOF;
 numMuscles = DatStore.nMuscles;
 
 time = OptInfo.result.solution.phase.time;
-NPTS = length(time);
+numColPoints = length(time);
+
+auxdata = OptInfo.result.setup.auxdata;
 
 % Extract experimental data.
 expTime = DatStore.time;
@@ -80,13 +82,16 @@ probeUmberger = Umberger2010MuscleMetabolicsProbe.safeDownCast(probe);
 rho = 1059.7; % Muscle density [kg/m^3]
 maxFiberVel = 12;  % Fiber-lengths per second
 
+lMT = interp1(DatStore.time,DatStore.LMT,time);
+[F,Fiso] = calcMuscleForcesDeGroote(a,lMtilde,vMtilde,lMT,auxdata);
+
+musc_energy_rate = NaN(numColPoints,numMuscles);
 for m = 1:numMuscles
-    m
     
     muscleNameApoorva = muscleMap(MuscleNames{m});
     musc = musclesApoorva.get(muscleNameApoorva);
     Fmax = musc.getMaxIsometricForce;   % Max isometric force [N]
-    Lceopt = 0.055;         % Optimal fiber length [m]
+    Lceopt = musc.getOptimalFiberLength;         % Optimal fiber length [m]
     
     rST = probeUmberger.getRatioSlowTwitchFibers(muscleNameApoorva);
     param_rFT = 1 - rST;        % Proportion of fast-twitch muscle fibers
@@ -97,29 +102,27 @@ for m = 1:numMuscles
     PCSA = Fmax/sigma;      % Physiological cross sectional area [m^2]
     mass = PCSA*rho*Lceopt; % Muscle mass [kg]
     
-    params = struct('width',0.80,'Lceopt',Lceopt, 'Arel',param_Arel, ...
+    paramsUmb = struct('Lceopt',Lceopt, 'Arel',param_Arel, ...
                 'Brel',param_Brel, 'Fmax',Fmax, 'rFT',param_rFT, ...
                 'VceMax_LceoptsPerSecond',param_Brel/param_Arel, ...
                 'muscleMass',mass, 'scalingFactorS',1.0, ...
                 'versionNumber',2010);
-    VCEmax_mps = params.VceMax_LceoptsPerSecond * Lceopt; % [m/s]
+    VCEmax_mps = paramsUmb.VceMax_LceoptsPerSecond * Lceopt; % [m/s]
     
-    heatRates = NaN(NPTS,5);
-    for i = 1:NPTS
+    heatRates = NaN(numColPoints,5);
+    for i = 1:numColPoints
         Lce = lMtilde(i,m)*Lceopt;
         Vce = vMtilde(i,m)*VCEmax_mps;
-        forces = calcMuscleForces(a(i,m),Lce,Vce,params);
-        F = forces(1);
-        Fiso = forces(2);
-        heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F,Fiso,e(i,m),a(i,m),params);
+        heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F(i,m),Fiso(i,m),e(i,m),a(i,m),paramsUmb);
     end
     
-    total_energy_rate(:,m) = heatRates(:,5) * mass;
+    musc_energy_rate(:,m) = heatRates(:,5) * mass;
     
 end
 
-
-% TODO left and right limbs together.
+bodyMass = 60; % kg
+wholebody_energy_rate = sum(musc_energy_rate,2);
+norm_average_wholebody_energy_rate = mean(wholebody_energy_rate) / bodyMass
 
 
 
