@@ -99,8 +99,11 @@ if ~isfield(Misc, 'phase_boundary') || isempty(Misc.phase_boundary)
     Misc.phase_boundary = NaN;
 end
 
-if Misc.ankle_clutched_spring && ~strcmp(Misc.costfun, 'Exc_Act')
-    error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+if Misc.ankle_clutched_spring 
+    if ~strcmp(Misc.costfun, 'Exc_Act')
+        error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+    end
+    Misc.costfun = 'Exc_ActSpr';
 end
 if ~isnan(Misc.phase_boundary)
     assert(Misc.ankle_clutched_spring);
@@ -132,7 +135,7 @@ if isempty(ID_path) || ~exist(ID_path,'file')
         [ID_outPath,ID_outName,ext]=fileparts(Misc.ID_ResultsPath);
         output_settings=fullfile(ID_outPath,[ID_outName '_settings.xml']);
         Opensim_ID(model_path,[time(1)-0.1 time(2)+0.1],Misc.Loads_path,IK_path,ID_outPath,[ID_outName ext],output_settings);
-        ID_path=Misc.ID_ResultsPath;
+        ID_path=[Misc.ID_ResultsPath '.sto'];
     end    
 end
 
@@ -287,15 +290,13 @@ perlMtilde_lower = -1*ones(1,auxdata.NMuscles);
 perlMtilde_upper = 1*ones(1,auxdata.NMuscles);
 bounds.eventgroup(1).lower = [pera_lower perlMtilde_lower]; 
 bounds.eventgroup(1).upper = [pera_upper perlMtilde_upper];
-if numPhases <= 2
+if numPhases == 2
     states_continuous = ...
             zeros(1, length(bounds.phase(1).state.lower));
             %+ ...
                      %length(bounds.phase(1).control.lower));
     bounds.eventgroup(2).lower = [states_continuous]; 
     bounds.eventgroup(2).upper = [states_continuous];
-else
-    error('Invalid numPhases.');
 end
 
 % Initial guess
