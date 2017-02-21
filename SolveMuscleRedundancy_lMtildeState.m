@@ -91,9 +91,15 @@ end
 if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
    Misc.costfun='Exc';
 end
+if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
+    Misc.tendonStiffnessCoeff = 35;
+end
 % Clutched spring for ankle plantarflexion (Collins 2015)
 if ~isfield(Misc, 'ankle_clutched_spring') || isempty(Misc.ankle_clutched_spring)
     Misc.ankle_clutched_spring = false;
+end
+if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
+    Misc.ankle_clutched_spring_stiffness = -1;
 end
 if ~isfield(Misc, 'phase_boundary') || isempty(Misc.phase_boundary)
     Misc.phase_boundary = NaN;
@@ -104,6 +110,12 @@ if Misc.ankle_clutched_spring
         error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
     end
     Misc.costfun = 'Exc_ActSpr';
+    if Misc.ankle_clutched_spring_stiffness ~= -1
+        assert(Misc.ankle_clutched_spring_stiffness >= 0 && ...
+            Misc.ankle_clutched_spring_stiffness <= 1);
+    end
+else
+    assert(Misc.ankle_clutched_spring_stiffness == -1);
 end
 if ~isnan(Misc.phase_boundary)
     assert(Misc.ankle_clutched_spring);
@@ -209,10 +221,11 @@ auxdata.Fvparam = Fvparam;
 load Faparam.mat                            
 auxdata.Faparam = Faparam;
 
-% Parameters of passive muscle force-length characteristic
+% Parameters of passive muscle force-length characteristic, and tendon
+% characteristic
 e0 = 0.6; kpe = 4; t50 = exp(kpe * (0.2 - 0.10e1) / e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
-auxdata.Fpparam = [pp1;pp2];
+auxdata.Fpparam = [pp1;pp2;Misc.tendonStiffnessCoeff];
 
 % Problem bounds 
 e_min = 0; e_max = 1;                   % bounds on muscle excitation
@@ -278,8 +291,14 @@ for ip = 1:numPhases
 end
 
 if Misc.ankle_clutched_spring
-    bounds.parameter.lower = [0, -0.5];
-    bounds.parameter.upper = [1, 0.5];
+    stiffness_lower = 0;
+    stiffness_upper = 1;
+    if Misc.ankle_clutched_spring_stiffness ~= -1
+        stiffness_lower = Misc.ankle_clutched_spring_stiffness;
+        stiffness_upper = Misc.ankle_clutched_spring_stiffness;
+    end
+    bounds.parameter.lower = [stiffness_lower, -0.5];
+    bounds.parameter.upper = [stiffness_upper, 0.5];
 end
 
 % Eventgroup
@@ -356,54 +375,63 @@ setup.derivatives.supplier = 'adigator';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-3;
-setup.mesh.maxiterations = 5;
+setup.mesh.maxiterations = 20;
 setup.mesh.colpointsmin = 3;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
 setup.displaylevel = 2;
-if numPhases == 1
-    phaseDurations = {tf - t0};
-elseif numPhases == 2
-    phaseDurations = {Misc.phase_boundary - t0, tf - Misc.phase_boundary};
-else
-    error('Invalid numPhases.');
-end
-for ip = 1:numPhases
-    NMeshIntervals = round(phaseDurations{ip} * Misc.Mesh_Frequency);
-    setup.mesh.phase(ip).colpoints = 3*ones(1,NMeshIntervals);
-    setup.mesh.phase(ip).fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
-end
+%if numPhases == 1
+%    phaseDurations = {tf - t0};
+%elseif numPhases == 2
+%    phaseDurations = {Misc.phase_boundary - t0, tf - Misc.phase_boundary};
+%else
+%    error('Invalid numPhases.');
+%end
+%for ip = 1:numPhases
+%    NMeshIntervals = round(phaseDurations{ip} * Misc.Mesh_Frequency);
+%    setup.mesh.phase(ip).colpoints = 3*ones(1,NMeshIntervals);
+%    setup.mesh.phase(ip).fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
+%end
 setup.functions.continuous = str2func(['musdynContinous_lMtildeState_' Misc.costfun]);
 setup.functions.endpoint = str2func(['musdynEndpoint_lMtildeState_' Misc.costfun]);
     
 % ADiGator setup
 persistent splinestruct
 input.auxdata = auxdata;
-if numPhases == 1
-    tdummy = guess.phase.time;
-    splinestruct = SplineInputData(tdummy,input);
-    splinenames = fieldnames(splinestruct);
-    for Scount = 1:length(splinenames)
-      secdim = size(splinestruct.(splinenames{Scount}),2);
-      splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
-      splinestruct.(splinenames{Scount}) = zeros(0,secdim);
-    end
-elseif numPhases == 2
-    for ip = 1:numPhases
-        tdummy = guess.phase(ip).time;
-        splinestruct.phase(ip) = SplineInputData(tdummy,input);
-        splinenames = fieldnames(splinestruct.phase(ip));
+
+pathLock='/tmp/adigator3.lock'
+% Try to create and lock this file.
+if ~system(sprintf('lockfile %s',pathLock))
+    % We succeeded, so perform some task which needs to be serialized.
+    if numPhases == 1
+        tdummy = guess.phase.time;
+        splinestruct = SplineInputData(tdummy,input);
+        splinenames = fieldnames(splinestruct);
         for Scount = 1:length(splinenames)
-          secdim = size(splinestruct.phase(ip).(splinenames{Scount}),2);
-          splinestructad.phase(ip).(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
-          splinestruct.phase(ip).(splinenames{Scount}) = zeros(0,secdim);
+          secdim = size(splinestruct.(splinenames{Scount}),2);
+          splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+          splinestruct.(splinenames{Scount}) = zeros(0,secdim);
         end
+    elseif numPhases == 2
+        for ip = 1:numPhases
+            tdummy = guess.phase(ip).time;
+            splinestruct.phase(ip) = SplineInputData(tdummy,input);
+            splinenames = fieldnames(splinestruct.phase(ip));
+            for Scount = 1:length(splinenames)
+              secdim = size(splinestruct.phase(ip).(splinenames{Scount}),2);
+              splinestructad.phase(ip).(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+              splinestruct.phase(ip).(splinenames{Scount}) = zeros(0,secdim);
+            end
+        end
+    else
+        error('Invalid numPhases.');
     end
-else
-    error('Invalid numPhases.');
+    setup.auxdata.splinestruct = splinestructad;
+    adigatorGenFiles4gpops2(setup)
+
+    % Now remove the lockfile
+    system(sprintf('rm -f %s',pathLock));
 end
-setup.auxdata.splinestruct = splinestructad;
-adigatorGenFiles4gpops2(setup)
 
 setup.functions.continuous = str2func(['Wrap4musdynContinous_lMtildeState_' Misc.costfun]);
 setup.adigatorgrd.continuous = str2func(['musdynContinous_lMtildeState_' Misc.costfun 'GrdWrap']);

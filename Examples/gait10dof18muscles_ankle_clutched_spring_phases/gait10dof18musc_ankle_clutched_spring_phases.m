@@ -13,7 +13,7 @@ end
 Datapath = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait10dof18musc', ...
     'OutputReference');
 IK_path=fullfile(Datapath,'IK','subject01_walk_IK.mot');
-ID_path=fullfile(Datapath,'ID','inversedynamics.sto');
+ID_path=fullfile(Datapath,'ID', 'Results', 'subject01_walk_ID.sto');
 %ID_path=[]; % compute ID from the external loads
 model_path=fullfile(Datapath,'subject01.osim');
 time=[0.7 1.4];     % Part of the right stance phase
@@ -24,7 +24,8 @@ Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 
 Misc.costfun = 'Exc_Act';
 Misc.ankle_clutched_spring = true;
-Misc.phase_boundary = 1.1;
+Misc.ankle_clutched_spring_stiffness = 0.5;
+%Misc.phase_boundary = 1.1;
 
 %% Solve the problem
 [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);

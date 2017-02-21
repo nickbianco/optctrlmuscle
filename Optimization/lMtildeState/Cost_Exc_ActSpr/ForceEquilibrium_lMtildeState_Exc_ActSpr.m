@@ -16,7 +16,7 @@ lT = lMT - sqrt((lM.^2 - w.^2));
 lTtilde = lT./lTs;
 
 % Tendon force-length characteristic
-fse = (exp(35*(lTtilde - 0.995)))/5-0.25;
+fse = (exp(Fpparam(3)*(lTtilde - 0.995)))/5-0.25;
 
 % Active muscle force-length characteristic
 b11 = Faparam(1);
