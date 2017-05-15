@@ -253,7 +253,7 @@ guess.phase.integral = 0;
 
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 
-if study{2}=='Quinlivan2017'
+if strcmp(study{2}, 'Quinlivan2017')
     % Exosuit moment curves
     ExoCurves = load('/Examples/SoftExosuitDesign/ExoCurves.mat');
     exoTime = ExoCurves.time;
@@ -274,6 +274,25 @@ if study{2}=='Quinlivan2017'
             elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
                 % Positive to match hip_flexion_r coord convention
                 DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
+            end
+        end
+    end
+end
+
+if strcmp(study{2}, 'Ding2016')
+    % Exosuit hip extension curves from Ding et al. 2016
+    DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
+    exoTime = DingExoCurves.time;
+    
+    cond = {'esep','eslp','lsep','lslp'};
+    if Misc.exo_force_level
+        exoForce = DingExoCurves.(cond{Misc.exo_force_level}).F;
+        exoMomentArm = DingExoCurves.(cond{Misc.exo_force_level}).r;
+        exoHipExtMoment = exoForce .* exoMomentArm;
+        for dof = 1:auxdata.Ndof
+            if strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+                % Negative to match hip_flexion_r coord convention
+                DatStore.T_exo(:,dof) = -interp1(exoTime, exoHipExtMoment, DatStore.time);
             end
         end
     end
