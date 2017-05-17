@@ -1,9 +1,19 @@
 import org.opensim.modeling.*
 
+cost = 2;
+switch cost
+    case 1
+        costdir = 'Exc_Act';
+    case 2
+        costdir = 'MinAlex';
+end
+
 for c = 1:5
     
     cond = {'slack','esep','eslp','lsep','lslp'};
-    load([cond{c} '.mat']) 
+    condColor = [64 64 64; 241 102 69; 255 198 93; 152 204 103; 76 195 217]/255;
+    condName = {'UNPD','ESEP','ESLP','LSEP','LSLP'};
+    load(fullfile(costdir,[cond{c} '.mat'])) 
     
     numDOFs = DatStore.nDOF;
     numMuscles = DatStore.nMuscles;
@@ -98,16 +108,51 @@ for c = 1:5
     
     bodyMass = 75; % kg
     wholebody_energy_rate = nansum(musc_energy_rate,2);
-    norm_average_wholebody_energy_rate(c) = mean(wholebody_energy_rate) / bodyMass
+    norm_average_wholebody_energy_rate = mean(wholebody_energy_rate) / bodyMass;
+    if c==1
+        scale = norm_average_wholebody_energy_rate;
+    end
+    
+    h1 = figure(1);
+    for m = 1:numMuscles
+        subplot(6,4,m)
+        title(MuscleNames(m),'interpreter', 'none')
+        plot(time,a(:,m),'Color',condColor(c,:),'LineWidth',1.2)
+        hold on
+    end
+    
+    h2 = figure(2);
+    bar(c,norm_average_wholebody_energy_rate/scale,'FaceColor',condColor(c,:))
+    hold on
+    axis([0 6 0.85 1.15])
+    
+    h3 = figure(3);
+    for m = 1:numMuscles
+        subplot(6,4,m)
+        title(MuscleNames(m),'interpreter', 'none')
+        plot(time,lMtilde(:,m),'Color',condColor(c,:),'LineWidth',1.2)
+        hold on
+    end
+    
+    h4 = figure(4);
+    for m = 1:numMuscles
+        subplot(6,4,m)
+        title(MuscleNames(m),'interpreter', 'none')
+        plot(time,vMtilde(:,m),'Color',condColor(c,:),'LineWidth',1.2)
+        hold on
+    end
     
 end
 
-bar(norm_average_wholebody_energy_rate)
-axis([0 6 1.0 1.2])
+figure(2)
+set(gca,'XTick',1:5,'XTickLabels',condName)
+ylabel('Normalized Metabolic Rate')
 
 
-
-
+set(h1,'Name','Muscle Activations')
+set(h2,'Name','Metabolic Rate')
+set(h3,'Name','Normalized Fiber Length')
+set(h4,'Name','Normalized Fiber Velocity')
 
 
 
