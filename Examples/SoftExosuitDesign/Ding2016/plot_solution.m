@@ -11,6 +11,7 @@ end
 for c = 1:5
     
     cond = {'slack','esep','eslp','lsep','lslp'};
+    condActual = ([0 -0.35 -0.5 -0.37 -0.42]+5.92)/5.92;
     condColor = [64 64 64; 241 102 69; 255 198 93; 152 204 103; 76 195 217]/255;
     condName = {'UNPD','ESEP','ESLP','LSEP','LSLP'};
     load(fullfile(costdir,[cond{c} '.mat'])) 
@@ -108,9 +109,9 @@ for c = 1:5
     
     bodyMass = 75; % kg
     wholebody_energy_rate = nansum(musc_energy_rate,2);
-    norm_average_wholebody_energy_rate = mean(wholebody_energy_rate) / bodyMass;
+    norm_average_wholebody_energy_rate(c) = mean(wholebody_energy_rate) / bodyMass
     if c==1
-        scale = norm_average_wholebody_energy_rate;
+        scale = norm_average_wholebody_energy_rate(c);
     end
     
     h1 = figure(1);
@@ -122,8 +123,9 @@ for c = 1:5
     end
     
     h2 = figure(2);
-    bar(c,norm_average_wholebody_energy_rate/scale,'FaceColor',condColor(c,:))
+    bar(c,condActual(c),'FaceColor',condColor(c,:))
     hold on
+    
     axis([0 6 0.85 1.15])
     
     h3 = figure(3);
@@ -142,12 +144,21 @@ for c = 1:5
         hold on
     end
     
+    h5 = figure(5);
+    for k = 1:numDOFs
+        subplot(5,1,k)
+        title(DOFNames(k),'interpreter', 'none')
+        plot(time,aT(:,k),'Color',condColor(c,:),'LineWidth',1.2)
+        hold on
+    end
+    
 end
 
 figure(2)
+plot(1:5,norm_average_wholebody_energy_rate/scale,'o--','LineWidth',1.5,...
+    'Color',[72/255 0 1])
 set(gca,'XTick',1:5,'XTickLabels',condName)
 ylabel('Normalized Metabolic Rate')
-
 
 set(h1,'Name','Muscle Activations')
 set(h2,'Name','Metabolic Rate')
