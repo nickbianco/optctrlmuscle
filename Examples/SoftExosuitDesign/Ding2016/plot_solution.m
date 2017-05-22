@@ -1,11 +1,13 @@
 import org.opensim.modeling.*
 
-cost = 2;
+cost = 3;
 switch cost
     case 1
         costdir = 'Exc_Act';
     case 2
         costdir = 'MinAlex';
+    case 3
+        costdir = 'Exc_Act_MinAlex';
 end
 
 for c = 1:5
@@ -18,6 +20,8 @@ for c = 1:5
     
     numDOFs = DatStore.nDOF;
     numMuscles = DatStore.nMuscles;
+    DOFNames = DatStore.DOFNames;
+    MuscleNames = DatStore.MuscleNames;
     
     time = OptInfo.result.solution.phase.time;
     numColPoints = length(time);
@@ -43,10 +47,6 @@ for c = 1:5
     % Get states
     a       = state(:,1:numMuscles);
     lMtilde = state(:,numMuscles+1:end);
-    
-    % Joint moment breakdown.
-%     deviceIndices = strmatch('ankle_angle', DatStore.DOFNames);
-%     assert(length(deviceIndices) == 1);
     
     % Metabolic cost
     modelApoorva = Model('Rajagopal2015.osim');

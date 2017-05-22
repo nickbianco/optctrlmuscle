@@ -20,7 +20,7 @@ lMtilde = input.phase.state(:,NMuscles+1:end);
 
 % PATH CONSTRAINTS
 % Hill-equilibrium constraint
-[Hilldiff, F] = ForceEquilibrium_lMtildeStateExoDing2016_Exc_Act_MinAlex(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff, F] = ForceEq_lMtildeStateExoDing2016_Exc_Act_MinAlex(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
@@ -58,8 +58,15 @@ for m = 1:NMuscles
     Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
 end
 
+m = 75;   % kg
+g = 9.81; % m/s^2
+v = 1.2;  % m/s
+
+wAct = 1;
+wExc = 1;
+wCOT = 1/(m*g*v);
 w1 = 1000;
-phaseout.integrand = sum(Edot,2) + sum(e.^2,2) + sum(a.^2,2) + w1.*sum(aT.^2,2);
+phaseout.integrand = wCOT.*sum(Edot,2) + wExc.*sum(e.^2,2) + wAct.*sum(a.^2,2) + w1.*sum(aT.^2,2);
 
 
 

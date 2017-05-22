@@ -58,8 +58,13 @@ for m = 1:NMuscles
     Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
 end
 
+m = 75;   % kg
+g = 9.81; % m/s^2
+v = 1.2;  % m/s
+
+wCOT = 1/(m*g*v);
 w1 = 1000;
-phaseout.integrand = sum(Edot.^2,2) + w1.*sum(aT.^2,2);
+phaseout.integrand = wCOT.*sum(Edot,2) + w1.*sum(aT.^2,2);
 
 
 
