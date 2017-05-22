@@ -27,27 +27,38 @@ Misc.Loads_path = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait2354_Simbody',
 
 % Optional Input Arguments
 Misc.costfun = 'Exc_Act_MinAlex';
-Misc.study = 'SoftExosuitDesign/Ding2016';
+Misc.study = 'SoftExosuitDesign/DingOpt';
 Misc.model_mass = 75.1646; % kg (Gait2354 mass)
 
 % Change to appropriate results directory
 cd(fullfile(DirCurrent,Misc.costfun))
 
 %% Solve the problem
-Misc.exo_force_level = 0;
-[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-filename='slack.mat';
-save(filename);
-
-cond = {'esep','eslp','lsep','lslp'};
-for i = 1:4
-    % Ding et al. 2016 condition
-    % 1 --> ESEP
-    % 2 --> ESLP
-    % 3 --> LSEP
-    % 4 --> LSLP
-    Misc.exo_force_level = i;
-    [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-    filename=strcat(cond{i},'.mat');
-    save(filename);
+study = strsplit(Misc.study,'/');
+switch study{2}
+    case 'Ding2016'
+        Misc.exo_force_level = 0;
+        [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+        filename='slack.mat';
+        save(filename);
+        
+        cond = {'esep','eslp','lsep','lslp'};
+        for i = 1:4
+            % Ding et al. 2016 condition
+            % 1 --> ESEP
+            % 2 --> ESLP
+            % 3 --> LSEP
+            % 4 --> LSLP
+            Misc.exo_force_level = i;
+            [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+            filename=strcat(cond{i},'.mat');
+            save(filename);
+        end
+        
+    case 'DingOpt'
+        [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+        filename='DingOpt.mat';
+        save(filename);   
 end
+
+

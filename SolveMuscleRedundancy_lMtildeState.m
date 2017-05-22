@@ -298,6 +298,21 @@ if strcmp(study{2}, 'Ding2016')
     end
 end
 
+if strcmp(study{2}, 'DingOpt')
+    DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
+    exoTime = DingExoCurves.time;
+    cond = {'esep','eslp','lsep','lslp'};
+    momentSum = 0;
+    for i=1:4
+        exoForce = DingExoCurves.(cond{Misc.exo_force_level}).F;
+        exoMomentArm = DingExoCurves.(cond{Misc.exo_force_level}).r;
+        momentSum = momentSum + max(exoForce);
+    end
+    peakHipExtMoment = momentSum/4;
+    
+    
+end
+
 % Spline structures
 for dof = 1:auxdata.Ndof
     for m = 1:auxdata.NMuscles       
