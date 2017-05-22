@@ -223,7 +223,15 @@ auxdata.finaltime = tf;
 umin = e_min*ones(1,auxdata.NMuscles); umax = e_max*ones(1,auxdata.NMuscles);
 vMtildemin = vMtilde_min*ones(1,auxdata.NMuscles); vMtildemax = vMtilde_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); aTmax = 1*ones(1,auxdata.Ndof);
-bounds.phase.control.lower = [umin aTmin vMtildemin]; bounds.phase.control.upper = [umax aTmax vMtildemax];
+if strcmp(study{2},'HipAnkle') || strcmp(study{2},'DingOpt')
+    aDmin = 0; aDmax = 1;
+    control_bounds_lower = [umin aTmin vMtildemin aDmin];
+    control_bounds_upper = [umax aTmax vMtildemax aDmax];
+else 
+    control_bounds_lower = [umin aTmin vMtildemin];
+    control_bounds_upper = [umax aTmax vMtildemax];
+end
+bounds.phase.control.lower = control_bounds_lower; bounds.phase.control.upper = control_bounds_upper;
 % States bunds
 actMin = a_min*ones(1,auxdata.NMuscles); actMax = a_max*ones(1,auxdata.NMuscles);
 lMtildemin = lMtilde_min*ones(1,auxdata.NMuscles); lMtildemax = lMtilde_max*ones(1,auxdata.NMuscles);
@@ -236,6 +244,23 @@ bounds.phase.integral.lower = 0; bounds.phase.integral.upper = 10000*(tf-t0);
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
+if strcmp(study{2},'DingOpt')
+    DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
+    cond = {'esep','eslp','lsep','lslp'};
+    momArms = zeros(length(DingExoCurves.time),length(cond));
+    for c = 1:length(cond)
+        momArms(:,c) = DingExoCurves.(cond{c}).r;
+    end
+    momArmsMean = mean(momArms,2);
+    momArmsStd = std(momArms,0,2);
+    
+    path_lower = [ID_bounds,HillEquil,momArmsMean-momArmsStd];
+    path_upper = [ID_bounds,HillEquil,momArmsMean+momArmsStd];
+else
+    path_lower = [ID_bounds,HillEquil];
+    path_upper = [ID_bounds,HillEquil];
+end
+
 bounds.phase.path.lower = [ID_bounds,HillEquil]; bounds.phase.path.upper = [ID_bounds,HillEquil];
 
 % Eventgroup
