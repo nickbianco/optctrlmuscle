@@ -10,13 +10,14 @@ switch cost
         costdir = 'Exc_Act_MinAlex';
 end
 
-for c = 1:5
+DingExoCurves = load('DingExoCurves.mat');
+for c = 1:6
     
-    cond = {'slack','esep','eslp','lsep','lslp'};
-    condActual = ([0 -0.35 -0.5 -0.37 -0.42]+5.92)/5.92;
-    condColor = [64 64 64; 241 102 69; 255 198 93; 152 204 103; 76 195 217]/255;
-    condName = {'UNPD','ESEP','ESLP','LSEP','LSLP'};
-    load(fullfile(costdir,[cond{c} '.mat'])) 
+    conds = {'slack','esep','eslp','lsep','lslp','DingOpt'};
+    condActual = ([0 -0.35 -0.5 -0.37 -0.42 -5.92]+5.92)/5.92;
+    condColor = [64 64 64; 241 102 69; 255 198 93; 152 204 103; 76 195 217; 75 0 130]/255;
+    condName = {'UNPD','ESEP','ESLP','LSEP','LSLP','OPT'};
+    load(fullfile('Ding2016',costdir,[conds{c} '.mat'])) 
     
     numDOFs = DatStore.nDOF;
     numMuscles = DatStore.nMuscles;
@@ -31,9 +32,15 @@ for c = 1:5
     % Extract experimental data.
     expTime = DatStore.time;
     qExp = DatStore.q_exp;
+    T_exp = DatStore.T_exp;
     momArmsExp = DatStore.dM;
     momArms = interp1(expTime, momArmsExp, time);
     jointAngles = pi / 180. * interp1(expTime, qExp, time);
+    for k = 1:numDOFs
+        if strcmp(DOFNames(k),'hip_flexion_r')
+            hipFlexIdx = k;
+        end
+    end
     
     % Extract parts of the solution related to the device.
     control = OptInfo.result.solution.phase.control;
@@ -42,7 +49,12 @@ for c = 1:5
     % Get controls
     e       = control(:,1:numMuscles); e(e<0)=0;
     aT      = control(:,numMuscles+1:numMuscles+numDOFs);
-    vMtilde = control(:,numMuscles+numDOFs+1:end);
+    if strcmp(conds{c},'DingOpt')
+        vMtilde = control(:,numMuscles+numDOFs+1:end-1);
+        aD = control(:,end);
+    else
+        vMtilde = control(:,numMuscles+numDOFs+1:end);
+    end
     
     % Get states
     a       = state(:,1:numMuscles);
@@ -125,8 +137,7 @@ for c = 1:5
     h2 = figure(2);
     bar(c,condActual(c),'FaceColor',condColor(c,:))
     hold on
-    
-    axis([0 6 0.85 1.15])
+    axis([0 7 0.85 1.15])
     
     h3 = figure(3);
     for m = 1:numMuscles
@@ -152,19 +163,35 @@ for c = 1:5
         hold on
     end
     
+    h6 = figure(6);
+    if strcmp(conds{c},'DingOpt')
+        Topt_exo = DatStore.Topt_exo;
+        peakHipExtMoment = Topt_exo(hipFlexIdx);        
+        plot(time,-peakHipExtMoment*aD)
+    else
+        if ~strcmp(conds{c},'slack')
+            exoForce = DingExoCurves.(conds{c}).F;
+            exoMomentArm = DingExoCurves.(conds{c}).r;
+            exoTime = DingExoCurves.time;
+            plot(exoTime,exoMomentArm.*exoForce)
+            hold on
+        end
+    end
 end
 
 figure(2)
-plot(1:5,norm_average_wholebody_energy_rate/scale,'o--','LineWidth',1.5,...
+plot(1:6,norm_average_wholebody_energy_rate/scale,'o--','LineWidth',1.5,...
     'Color',[72/255 0 1])
-set(gca,'XTick',1:5,'XTickLabels',condName)
+set(gca,'XTick',1:6,'XTickLabels',condName)
 ylabel('Normalized Metabolic Rate')
 
 set(h1,'Name','Muscle Activations')
 set(h2,'Name','Metabolic Rate')
 set(h3,'Name','Normalized Fiber Length')
 set(h4,'Name','Normalized Fiber Velocity')
-
+                                                                                    
+figure(6)
+plot(expTime,-T_exp(:,hipFlexIdx),'k--','LineWidth',1.5)
 
 
 

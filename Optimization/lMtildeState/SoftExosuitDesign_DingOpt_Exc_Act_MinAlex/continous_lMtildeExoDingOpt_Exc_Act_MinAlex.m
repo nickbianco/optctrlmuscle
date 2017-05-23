@@ -8,11 +8,13 @@ tauDeact        = input.auxdata.tauDeact;
 params          = input.auxdata.params;
 splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
+Topt_exo        = input.auxdata.Topt_exo;
 
 % Get controls
 e       = input.phase.control(:,1:NMuscles);
 aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
-vMtilde = input.phase.control(:,NMuscles+Ndof+1:end);
+vMtilde = input.phase.control(:,NMuscles+Ndof+1:end-1);
+aD      = input.phase.control(:,end);
 
 % Get states
 a       = input.phase.state(:,1:NMuscles);
@@ -27,7 +29,7 @@ Topt = 150;
 Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
-    T_exo=splinestruct.EXO(:,dof);
+    T_exo=Topt_exo(dof)*aD;
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
     T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof) + T_exo;
     Tdiff(:,dof) = (T_exp-T_sim);

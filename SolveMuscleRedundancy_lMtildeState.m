@@ -244,23 +244,6 @@ bounds.phase.integral.lower = 0; bounds.phase.integral.upper = 10000*(tf-t0);
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
-if strcmp(study{2},'DingOpt')
-    DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
-    cond = {'esep','eslp','lsep','lslp'};
-    momArms = zeros(length(DingExoCurves.time),length(cond));
-    for c = 1:length(cond)
-        momArms(:,c) = DingExoCurves.(cond{c}).r;
-    end
-    momArmsMean = mean(momArms,2);
-    momArmsStd = std(momArms,0,2);
-    
-    path_lower = [ID_bounds,HillEquil,momArmsMean-momArmsStd];
-    path_upper = [ID_bounds,HillEquil,momArmsMean+momArmsStd];
-else
-    path_lower = [ID_bounds,HillEquil];
-    path_upper = [ID_bounds,HillEquil];
-end
-
 bounds.phase.path.lower = [ID_bounds,HillEquil]; bounds.phase.path.upper = [ID_bounds,HillEquil];
 
 % Eventgroup
@@ -272,7 +255,11 @@ bounds.eventgroup.lower = [pera_lower perlMtilde_lower]; bounds.eventgroup.upper
 % Initial guess
 N = length(DatStore.time);
 guess.phase.time = DatStore.time;
-guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
+if strcmp(study{2},'HipAnkle') || strcmp(study{2},'DingOpt')
+    guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+else
+    guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
+end
 guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
 guess.phase.integral = 0;
 
@@ -323,19 +310,28 @@ if strcmp(study{2}, 'Ding2016')
     end
 end
 
+% Peak assistive moments
+DatStore.Topt_exo = zeros(auxdata.Ndof,1);
+
 if strcmp(study{2}, 'DingOpt')
     DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
     exoTime = DingExoCurves.time;
     cond = {'esep','eslp','lsep','lslp'};
     momentSum = 0;
     for i=1:4
-        exoForce = DingExoCurves.(cond{Misc.exo_force_level}).F;
-        exoMomentArm = DingExoCurves.(cond{Misc.exo_force_level}).r;
-        momentSum = momentSum + max(exoForce);
+        exoForce = DingExoCurves.(cond{i}).F;
+        exoMomentArm = DingExoCurves.(cond{i}).r;
+        momentSum = momentSum + max(exoMomentArm.*exoForce);
     end
     peakHipExtMoment = momentSum/4;
+    for dof = 1:auxdata.Ndof
+       if strcmp('hip_flexion_r',DatStore.DOFNames{dof})
+          % Negative to match hip_flexion_r coord convention
+          DatStore.Topt_exo(dof) = -peakHipExtMoment; 
+       end
+    end
     
-    
+    auxdata.Topt_exo = DatStore.Topt_exo;
 end
 
 % Spline structures
