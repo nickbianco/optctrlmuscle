@@ -27,7 +27,7 @@ Misc.Loads_path = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait2354_Simbody',
 
 % Optional Input Arguments
 Misc.costfun = 'Exc_Act_MinAlex';
-Misc.study = 'SoftExosuitDesign/DingOpt';
+Misc.study = 'SoftExosuitDesign/Ding2016';
 Misc.model_mass = 75.1646; % kg (Gait2354 mass)
 
 % Change to appropriate results directory
@@ -37,18 +37,20 @@ cd(fullfile(DirCurrent,Misc.costfun))
 study = strsplit(Misc.study,'/');
 switch study{2}
     case 'Ding2016'
-        Misc.exo_force_level = 0;
-        [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-        filename='slack.mat';
-        save(filename);
+%         Misc.exo_force_level = 0;
+%         [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+%         filename='slack.mat';
+%         save(filename);
         
-        cond = {'esep','eslp','lsep','lslp'};
-        for i = 1:4
+        cond = {'esep','eslp','lsep','lslp','esmp','lsmp'};
+        for i = 6
             % Ding et al. 2016 condition
             % 1 --> ESEP
             % 2 --> ESLP
             % 3 --> LSEP
             % 4 --> LSLP
+            % 5 --> ESMP
+            % 6 --> LSMP
             Misc.exo_force_level = i;
             [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
             filename=strcat(cond{i},'.mat');

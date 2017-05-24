@@ -296,7 +296,7 @@ if strcmp(study{2}, 'Ding2016')
     DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
     exoTime = DingExoCurves.time;
     
-    cond = {'esep','eslp','lsep','lslp'};
+    cond = {'esep','eslp','lsep','lslp','esmp','lsmp'};
     if Misc.exo_force_level
         exoForce = DingExoCurves.(cond{Misc.exo_force_level}).F;
         exoMomentArm = DingExoCurves.(cond{Misc.exo_force_level}).r;
@@ -315,7 +315,6 @@ DatStore.Topt_exo = zeros(auxdata.Ndof,1);
 
 if strcmp(study{2}, 'DingOpt')
     DingExoCurves = load('/Examples/SoftExosuitDesign/Ding2016/DingExoCurves.mat');
-    exoTime = DingExoCurves.time;
     cond = {'esep','eslp','lsep','lslp'};
     momentSum = 0;
     for i=1:4

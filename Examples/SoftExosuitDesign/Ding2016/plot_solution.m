@@ -1,3 +1,4 @@
+close all; clear all; clc;
 import org.opensim.modeling.*
 
 cost = 3;
@@ -11,13 +12,13 @@ switch cost
 end
 
 DingExoCurves = load('DingExoCurves.mat');
-for c = 1:6
+for c = 1:7
     
-    conds = {'slack','esep','eslp','lsep','lslp','DingOpt'};
-    condActual = ([0 -0.35 -0.5 -0.37 -0.42 -5.92]+5.92)/5.92;
-    condColor = [64 64 64; 241 102 69; 255 198 93; 152 204 103; 76 195 217; 75 0 130]/255;
-    condName = {'UNPD','ESEP','ESLP','LSEP','LSLP','OPT'};
-    load(fullfile('Ding2016',costdir,[conds{c} '.mat'])) 
+    conds = {'slack','esep','eslp','lsep','lslp','esmp','lsmp'};
+    condActual = ([0 -0.35 -0.5 -0.37 -0.42 -5.92 -5.92]+5.92)/5.92;
+    condColor = [64 64 64; 241 102 69; 255 198 93; 152 204 103; 76 195 217; 233 0 255; 21 0 255]/255;
+    condName = {'UNPD','ESEP','ESLP','LSEP','LSLP','ESMP','LSMP'};
+    load(fullfile(costdir,[conds{c} '.mat'])) 
     
     numDOFs = DatStore.nDOF;
     numMuscles = DatStore.nMuscles;
@@ -126,6 +127,7 @@ for c = 1:6
         scale = norm_average_wholebody_energy_rate(c);
     end
     
+    % Muscle activations
     h1 = figure(1);
     for m = 1:numMuscles
         subplot(6,4,m)
@@ -134,11 +136,13 @@ for c = 1:6
         hold on
     end
     
+    % Metabolic rate
     h2 = figure(2);
     bar(c,condActual(c),'FaceColor',condColor(c,:))
     hold on
-    axis([0 7 0.85 1.15])
+    axis([0 8 0.85 1.15])
     
+    % Normalized fiber lengths
     h3 = figure(3);
     for m = 1:numMuscles
         subplot(6,4,m)
@@ -147,6 +151,7 @@ for c = 1:6
         hold on
     end
     
+    % Normalized fiber velocities
     h4 = figure(4);
     for m = 1:numMuscles
         subplot(6,4,m)
@@ -155,14 +160,16 @@ for c = 1:6
         hold on
     end
     
+    % Reserve actuators
     h5 = figure(5);
     for k = 1:numDOFs
-        subplot(5,1,k)
+        subplot(3,2,k)
         title(DOFNames(k),'interpreter', 'none')
         plot(time,aT(:,k),'Color',condColor(c,:),'LineWidth',1.2)
         hold on
     end
     
+    % Assistive moments
     h6 = figure(6);
     if strcmp(conds{c},'DingOpt')
         Topt_exo = DatStore.Topt_exo;
@@ -170,29 +177,51 @@ for c = 1:6
         plot(time,-peakHipExtMoment*aD)
     else
         if ~strcmp(conds{c},'slack')
-            exoForce = DingExoCurves.(conds{c}).F;
-            exoMomentArm = DingExoCurves.(conds{c}).r;
-            exoTime = DingExoCurves.time;
-            plot(exoTime,exoMomentArm.*exoForce)
+%             exoForce = DingExoCurves.(conds{c}).F;
+%             exoMomentArm = DingExoCurves.(conds{c}).r;
+%             exoTime = DingExoCurves.time;
+            plot(DatStore.time,-DatStore.T_exo(:,hipFlexIdx),'Color',condColor(c,:),'LineWidth',1.5)
             hold on
         end
     end
 end
 
-figure(2)
-plot(1:6,norm_average_wholebody_energy_rate/scale,'o--','LineWidth',1.5,...
-    'Color',[72/255 0 1])
-set(gca,'XTick',1:6,'XTickLabels',condName)
-ylabel('Normalized Metabolic Rate')
-
 set(h1,'Name','Muscle Activations')
+set(h1,'units','normalized','position',[0 0 1 1])
+print(h1,'Ding_Gait2354_MuscleActivations','-dmeta')
+
 set(h2,'Name','Metabolic Rate')
+set(h2,'units','normalized','position',[0.25 0.25 0.75 0.75])
+figure(2)
+plot(1:7,norm_average_wholebody_energy_rate/scale,'o--','LineWidth',1.5,...
+    'Color',[72/255 0 1])
+set(gca,'XTick',1:7,'XTickLabels',condName)
+ylabel('Normalized Metabolic Rate')
+print(h2,'Ding_Gait2354_MetabolicRate','-dmeta')
+
 set(h3,'Name','Normalized Fiber Length')
+set(h3,'units','normalized','position',[0 0 1 1])
+print(h3,'Ding_Gait2354_NormalizedFiberLength','-dmeta')
+
 set(h4,'Name','Normalized Fiber Velocity')
-                                                                                    
+set(h4,'units','normalized','position',[0 0 1 1])
+print(h4,'Ding_Gait2354_NormalizedFiberVelocity','-dmeta')
+
+set(h5,'Name','Reserve Actuators')
+set(h5,'units','normalized','position',[0 0 1 1])
+print(h5,'Ding_Gait2354_ReserveActuators','-dmeta')
+
+set(h6,'Name','Assistive Moment')
 figure(6)
 plot(expTime,-T_exp(:,hipFlexIdx),'k--','LineWidth',1.5)
-
+dq = diff(qExp);
+plot(expTime(1:end-1),T_exp(1:end-1,hipFlexIdx).*dq(:,hipFlexIdx),'--','LineWidth',1.5,'Color',[179 0 0]/255)
+plot(expTime(1:end-1),-50*dq(:,hipFlexIdx),'--','LineWidth',1.5,'Color',[51 102 0]/255)
+legend({'ESEP','ESLP','LSEP','LSLP','ESMP','LSMP','Hip ID Moment','Hip Power','Hip Velocity (scaled)'},'Location','Northeast');
+axis([0.6 1.4 -50 100])
+xlabel('Stance phase (s)')
+ylabel('Moment (N/m)')
+print(h6,'Ding_Gait2354_AssistiveMoments','-dmeta')
 
 
 
