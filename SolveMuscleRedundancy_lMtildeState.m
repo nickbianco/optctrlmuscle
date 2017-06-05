@@ -399,10 +399,41 @@ setup.functions.endpoint = str2func(['musdynEndpoint_lMtildeState_' Misc.costfun
 persistent splinestruct
 input.auxdata = auxdata;
 
-pathLock='/tmp/adigator3.lock'
-% Try to create and lock this file.
-if ~system(sprintf('lockfile %s',pathLock))
-    % We succeeded, so perform some task which needs to be serialized.
+if isunix
+    pathLock='/tmp/adigator3.lock'
+    % Try to create and lock this file.
+    if ~system(sprintf('lockfile %s',pathLock))
+        % We succeeded, so perform some task which needs to be serialized.
+        if numPhases == 1
+            tdummy = guess.phase.time;
+            splinestruct = SplineInputData(tdummy,input);
+            splinenames = fieldnames(splinestruct);
+            for Scount = 1:length(splinenames)
+              secdim = size(splinestruct.(splinenames{Scount}),2);
+              splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+              splinestruct.(splinenames{Scount}) = zeros(0,secdim);
+            end
+        elseif numPhases == 2
+            for ip = 1:numPhases
+                tdummy = guess.phase(ip).time;
+                splinestruct.phase(ip) = SplineInputData(tdummy,input);
+                splinenames = fieldnames(splinestruct.phase(ip));
+                for Scount = 1:length(splinenames)
+                  secdim = size(splinestruct.phase(ip).(splinenames{Scount}),2);
+                  splinestructad.phase(ip).(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+                  splinestruct.phase(ip).(splinenames{Scount}) = zeros(0,secdim);
+                end
+            end
+        else
+            error('Invalid numPhases.');
+        end
+        setup.auxdata.splinestruct = splinestructad;
+        adigatorGenFiles4gpops2(setup)
+    
+        % Now remove the lockfile
+        system(sprintf('rm -f %s',pathLock));
+    end
+elseif ispc
     if numPhases == 1
         tdummy = guess.phase.time;
         splinestruct = SplineInputData(tdummy,input);
@@ -428,9 +459,8 @@ if ~system(sprintf('lockfile %s',pathLock))
     end
     setup.auxdata.splinestruct = splinestructad;
     adigatorGenFiles4gpops2(setup)
-
-    % Now remove the lockfile
-    system(sprintf('rm -f %s',pathLock));
+else
+    error('Platform unknown.');
 end
 
 setup.functions.continuous = str2func(['Wrap4musdynContinous_lMtildeState_' Misc.costfun]);
