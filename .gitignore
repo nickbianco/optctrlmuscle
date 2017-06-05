@@ -20,5 +20,7 @@ out.log
 # Powerpoint files
 *.pptx
 
-# Vector image files
+# Image files
 *.emf
+*.png
+*.jpg
