@@ -98,6 +98,9 @@ end
 if ~isfield(Misc, 'ankle_clutched_spring') || isempty(Misc.ankle_clutched_spring)
     Misc.ankle_clutched_spring = false;
 end
+if ~isfield(Misc, 'ankle_clutched_spring_stance_only') || isempty(Misc.ankle_clutched_spring_stance_only)
+    Misc.ankle_clutched_spring_stance_only = false;
+end
 if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
     Misc.ankle_clutched_spring_stiffness = -1;
 end
@@ -114,11 +117,17 @@ if Misc.ankle_clutched_spring
         assert(Misc.ankle_clutched_spring_stiffness >= 0 && ...
             Misc.ankle_clutched_spring_stiffness <= 1);
     end
+    if Misc.ankle_clutched_spring_stance_only ~= false
+        assert(Misc.ankle_clutched_spring_stance_only > time(1) && ...
+            Misc.ankle_clutched_spring_stance_only < time(2))
+    end
 else
     assert(Misc.ankle_clutched_spring_stiffness == -1);
+    assert(Misc.ankle_clutched_spring_stance_only == 0);
 end
 if ~isnan(Misc.phase_boundary)
     assert(Misc.ankle_clutched_spring);
+    assert(Misc.ankle_clutched_spring_stance_only == 0);
     boundary = Misc.phase_boundary;
     assert(time(1) < boundary);
     assert(boundary < time(2));
@@ -199,6 +208,9 @@ auxdata.ankle_clutched_spring = Misc.ankle_clutched_spring;
 if Misc.ankle_clutched_spring
     % TODO support separately clutching left and right leg.
     auxdata.clutched_spring_dofs = strmatch('ankle_angle', DatStore.DOFNames);
+end
+if Misc.ankle_clutched_spring_stance_only ~= 0
+    auxdata.pushoff_time = Misc.ankle_clutched_spring_stance_only;
 end
 
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
@@ -320,6 +332,8 @@ end
 
 % Initial guess
 N = length(DatStore.time);
+disp('DEBUG initial guess length');
+disp(N);
 if numPhases == 1
     guess.phase.time = DatStore.time;
     guess.phase.control = [DatStore.SoAct ...
@@ -397,42 +411,57 @@ setup.functions.endpoint = str2func(['musdynEndpoint_lMtildeState_' Misc.costfun
     
 % ADiGator setup
 persistent splinestruct
+persistent isStancePhase
 input.auxdata = auxdata;
 
 if isunix
     pathLock='/tmp/adigator3.lock'
     % Try to create and lock this file.
-    if ~system(sprintf('lockfile %s',pathLock))
-        % We succeeded, so perform some task which needs to be serialized.
-        if numPhases == 1
-            tdummy = guess.phase.time;
-            splinestruct = SplineInputData(tdummy,input);
-            splinenames = fieldnames(splinestruct);
-            for Scount = 1:length(splinenames)
-              secdim = size(splinestruct.(splinenames{Scount}),2);
-              splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
-              splinestruct.(splinenames{Scount}) = zeros(0,secdim);
-            end
-        elseif numPhases == 2
-            for ip = 1:numPhases
-                tdummy = guess.phase(ip).time;
-                splinestruct.phase(ip) = SplineInputData(tdummy,input);
-                splinenames = fieldnames(splinestruct.phase(ip));
+    try 
+        if ~system(sprintf('lockfile %s',pathLock))
+            % We succeeded, so perform some task which needs to be serialized.
+            if numPhases == 1
+                tdummy = guess.phase.time;
+                splinestruct = SplineInputData(tdummy,input);
+                splinenames = fieldnames(splinestruct);
                 for Scount = 1:length(splinenames)
-                  secdim = size(splinestruct.phase(ip).(splinenames{Scount}),2);
-                  splinestructad.phase(ip).(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
-                  splinestruct.phase(ip).(splinenames{Scount}) = zeros(0,secdim);
+                  secdim = size(splinestruct.(splinenames{Scount}),2);
+                  splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+                  splinestruct.(splinenames{Scount}) = zeros(0,secdim);
                 end
+                if Misc.ankle_clutched_spring_stance_only ~= 0
+                    %isStancePhase = zeros(length(tdummy), 1);
+                    %isStancePhase(find(tdummy < input.auxdata.pushoff_time)) = 1;
+                    isStancePhasead = adigatorCreateAuxInput([Inf, 1]);
+                end
+            elseif numPhases == 2
+                for ip = 1:numPhases
+                    tdummy = guess.phase(ip).time;
+                    splinestruct.phase(ip) = SplineInputData(tdummy,input);
+                    splinenames = fieldnames(splinestruct.phase(ip));
+                    for Scount = 1:length(splinenames)
+                      secdim = size(splinestruct.phase(ip).(splinenames{Scount}),2);
+                      splinestructad.phase(ip).(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+                      splinestruct.phase(ip).(splinenames{Scount}) = zeros(0,secdim);
+                    end
+                end
+            else
+                error('Invalid numPhases.');
             end
-        else
-            error('Invalid numPhases.');
+            setup.auxdata.splinestruct = splinestructad;
+            if Misc.ankle_clutched_spring_stance_only ~= 0
+                setup.auxdata.isStancePhase = isStancePhasead;
+            end
+            adigatorGenFiles4gpops2(setup)
+            % Now remove the lockfile
+            system(sprintf('rm -f %s',pathLock));
         end
-        setup.auxdata.splinestruct = splinestructad;
-        adigatorGenFiles4gpops2(setup)
-    
+    catch ME
         % Now remove the lockfile
         system(sprintf('rm -f %s',pathLock));
+        rethrow(ME);
     end
+    
 elseif ispc
     if numPhases == 1
         tdummy = guess.phase.time;
@@ -442,6 +471,12 @@ elseif ispc
           secdim = size(splinestruct.(splinenames{Scount}),2);
           splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
           splinestruct.(splinenames{Scount}) = zeros(0,secdim);
+        end
+
+        if Misc.ankle_clutched_spring_stance_only ~= 0
+            %isStancePhase = zeros(length(tdummy), 1);
+            %isStancePhase(find(tdummy < input.auxdata.pushoff_time)) = 1;
+            isStancePhasead = adigatorCreateAuxInput([Inf, 1]);
         end
     elseif numPhases == 2
         for ip = 1:numPhases
@@ -458,6 +493,9 @@ elseif ispc
         error('Invalid numPhases.');
     end
     setup.auxdata.splinestruct = splinestructad;
+    if Misc.ankle_clutched_spring_stance_only ~= 0
+        setup.auxdata.isStancePhase = isStancePhasead;
+    end
     adigatorGenFiles4gpops2(setup)
 else
     error('Platform unknown.');
