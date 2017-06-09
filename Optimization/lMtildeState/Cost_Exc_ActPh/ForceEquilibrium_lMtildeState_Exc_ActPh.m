@@ -2,7 +2,7 @@
 % All muscle-tendon characteristics are fully described in the publication
 % and its online supplement
 
-function [err, FT] = ForceEquilibrium_lMtildeState_Exc_Act(a,lMtilde,vMtilde,lMT,params,Fvparam,Fpparam,Faparam)
+function [err, FT] = ForceEquilibrium_lMtildeState_Exc_ActPh(a,lMtilde,vMtilde,lMT,params,Fvparam,Fpparam,Faparam)
 
 FMo = ones(size(a,1),1)*params(1,:);
 lMo = ones(size(a,1),1)*params(2,:);
@@ -16,7 +16,7 @@ lT = lMT - sqrt((lM.^2 - w.^2));
 lTtilde = lT./lTs;
 
 % Tendon force-length characteristic
-fse = (exp(Fpparam(3)*(lTtilde - 0.995)))/5-0.25;
+fse = (exp(35*(lTtilde - 0.995)))/5-0.25;
 
 % Active muscle force-length characteristic
 b11 = Faparam(1);

@@ -14,6 +14,7 @@ for dof = 1:Ndof
     end
     sstruct.ID(:,dof) = ppval(input.auxdata.JointIDSpline(dof),t);
     sstruct.EXO(:,dof) = ppval(input.auxdata.JointEXOSpline(dof),t);
+    sstruct.IK(:,dof) = pi / 180. * ppval(input.auxdata.JointIKSpline(dof),t);
 end
 
 for m = 1:NMuscles
