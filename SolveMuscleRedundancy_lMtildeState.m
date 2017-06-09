@@ -136,16 +136,6 @@ if Misc.ankle_clutched_spring
 else
     assert(Misc.ankle_clutched_spring_stiffness == -1);
 end
-if ~isnan(Misc.phase_boundary)
-    assert(Misc.ankle_clutched_spring);
-    boundary = Misc.phase_boundary;
-    assert(time(1) < boundary);
-    assert(boundary < time(2));
-    numPhases = 2;
-    Misc.costfun = 'Exc_ActPh';
-else
-    numPhases = 1;
-end
 
 % Based on study and cost function, decide which continuous and endpoint
 % functions to use
@@ -155,8 +145,6 @@ switch study{1}
         tag = '';
     case 'SoftExosuitDesign'
         tag = ['Exo' study{2}];
-    case 'ISB2017'
-        tag = ['ISB' study{2}];
 end
 tag = [tag '_' Misc.costfun];
 
@@ -341,10 +329,8 @@ end
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
-for ip = 1:numPhases
-    bounds.phase(ip).path.lower = [ID_bounds,HillEquil];
-    bounds.phase(ip).path.upper = [ID_bounds,HillEquil];
-end
+bounds.phase.path.lower = [ID_bounds,HillEquil];
+bounds.phase.path.upper = [ID_bounds,HillEquil];
 
 if Misc.ankle_clutched_spring
     stiffness_lower = 0;
@@ -391,12 +377,10 @@ switch study{2}
         guess.parameter = 0;
     case 'HipAnkleMass'
         guess.parameter = 0;
-    case 'Collins2015'
-        guess.parameter = [0.5, 0];
-    case 'Quinlivan2017'
-        % TODO
-    otherwise
-        % No parameter case
+end
+
+if Misc.ankle_clutched_spring
+    guess.parameter = [0.5, 0];
 end
 
 % Empty exosuit force and torque data structures
