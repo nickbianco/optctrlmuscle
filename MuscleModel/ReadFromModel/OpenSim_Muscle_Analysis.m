@@ -21,12 +21,19 @@ tool.setName(name);
 tool.setModelFilename(model_sel);
 tool.setCoordinatesFileName(motion_file);
 
-if ispc
-    out_path_xml=fullfile(output_path,['muscle_analysis_' name '.xml']);
-    tool.print(out_path_xml);
-    tool.run;
-else
-
+% if ispc
+%     out_path_xml=fullfile(output_path,['muscle_analysis_' name '.xml']);
+%     tool.print(out_path_xml);
+%     tool.run;
+% else
+    [results_dir,~] = fileparts(output_path);
+    if ~exist(results_dir, 'dir')
+        mkdir(results_dir)
+    end
+    if ~exist(output_path, 'dir')
+        mkdir(output_path)
+    end
+    
     out_path_xml=fullfile(['muscle_analysis_' name '.xml']);
     tool.print(out_path_xml);
     %tool_deserialized = AnalyzeTool(out_path_xml);
@@ -35,9 +42,9 @@ else
     %
     % TODOmrs hard-coded OpenSim executable path location.
     assert(~isempty(getenv('OPENSIM_HOME')));
-    assert(exist([getenv('OPENSIM_HOME') '/bin/analyze'], 'file') == 2);
-    system([getenv('OPENSIM_HOME') '/bin/analyze -S ' out_path_xml]);
-end
+    %assert(exist([getenv('OPENSIM_HOME') '/bin/analyze'], 'file') == 2);
+    system(['"' getenv('OPENSIM_HOME') '/bin/analyze" -S ' out_path_xml]);
+% end
 
 % dos(['analyze1 -S ', out_path_xml]);
 
