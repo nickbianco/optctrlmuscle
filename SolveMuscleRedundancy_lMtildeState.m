@@ -109,6 +109,33 @@ if ~isfield(Misc,'subcase') || isempty(Misc.subcase)
 else
     folder = [Misc.costfun '_' Misc.subcase];
 end
+% variable tendon stiffness
+if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
+    Misc.tendonStiffnessCoeff = 35;
+end
+% Clutched spring for ankle plantarflexion (Collins 2015)
+if ~isfield(Misc, 'ankle_clutched_spring') || isempty(Misc.ankle_clutched_spring)
+    Misc.ankle_clutched_spring = false;
+end
+if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
+    Misc.ankle_clutched_spring_stiffness = -1;
+end
+if ~isfield(Misc, 'phase_boundary') || isempty(Misc.phase_boundary)
+    Misc.phase_boundary = NaN;
+end
+
+if Misc.ankle_clutched_spring 
+    if ~strcmp(Misc.costfun, 'Exc_Act')
+        error('ankle_clutched_spring == true requires costfun == ''Exc_Act''');
+    end
+    Misc.costfun = 'Exc_ActSpr';
+    if Misc.ankle_clutched_spring_stiffness ~= -1
+        assert(Misc.ankle_clutched_spring_stiffness >= 0 && ...
+            Misc.ankle_clutched_spring_stiffness <= 1);
+    end
+else
+    assert(Misc.ankle_clutched_spring_stiffness == -1);
+end
 
 % Based on study and cost function, decide which continuous and endpoint
 % functions to use
@@ -140,7 +167,7 @@ if isempty(ID_path) || ~exist(ID_path,'file')
         [ID_outPath,ID_outName,ext]=fileparts(Misc.ID_ResultsPath);
         output_settings=fullfile(ID_outPath,[ID_outName '_settings.xml']);
         Opensim_ID(model_path,[time(1)-0.1 time(2)+0.1],Misc.Loads_path,IK_path,ID_outPath,[ID_outName ext],output_settings);
-        ID_path=Misc.ID_ResultsPath;
+        ID_path=[Misc.ID_ResultsPath '.sto'];
     end    
 end
 
@@ -188,6 +215,12 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
 
+auxdata.ankle_clutched_spring = Misc.ankle_clutched_spring;
+if Misc.ankle_clutched_spring
+    % TODO support separately clutching left and right leg.
+    auxdata.clutched_spring_dofs = strmatch('ankle_angle', DatStore.DOFNames);
+end
+
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
 for i = 1:auxdata.Ndof
     auxdata.MA(i).Joint(:,:) = DatStore.dM(:,i,:);  % moment arms
@@ -208,10 +241,11 @@ auxdata.Fvparam = Fvparam;
 load Faparam.mat                            
 auxdata.Faparam = Faparam;
 
-% Parameters of passive muscle force-length characteristic
+% Parameters of passive muscle force-length characteristic, and tendon
+% characteristic
 e0 = 0.6; kpe = 4; t50 = exp(kpe * (0.2 - 0.10e1) / e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
-auxdata.Fpparam = [pp1;pp2];
+auxdata.Fpparam = [pp1;pp2;Misc.tendonStiffnessCoeff];
 
 % Problem bounds 
 e_min = 0; e_max = 1;                   % bounds on muscle excitation
@@ -220,15 +254,22 @@ vMtilde_min = -1; vMtilde_max = 1;      % bounds on normalized muscle fiber velo
 lMtilde_min = 0.2; lMtilde_max = 1.8;   % bounds on normalized muscle fiber length
 
 % Time bounds
-t0 = DatStore.time(1); tf = DatStore.time(end);
-bounds.phase.initialtime.lower = t0; bounds.phase.initialtime.upper = t0;
-bounds.phase.finaltime.lower = tf; bounds.phase.finaltime.upper = tf;
+t0 = DatStore.time(1); 
+tf = DatStore.time(end);
+bounds.phase.initialtime.lower = t0; 
+bounds.phase.initialtime.upper = t0;
+bounds.phase.finaltime.lower = tf; 
+bounds.phase.finaltime.upper = tf;
 auxdata.initialtime = t0;
 auxdata.finaltime = tf;
+
 % Controls bounds
-umin = e_min*ones(1,auxdata.NMuscles); umax = e_max*ones(1,auxdata.NMuscles);
-vMtildemin = vMtilde_min*ones(1,auxdata.NMuscles); vMtildemax = vMtilde_max*ones(1,auxdata.NMuscles);
-aTmin = -1*ones(1,auxdata.Ndof); aTmax = 1*ones(1,auxdata.Ndof);
+umin = e_min*ones(1,auxdata.NMuscles); 
+umax = e_max*ones(1,auxdata.NMuscles);
+vMtildemin = vMtilde_min*ones(1,auxdata.NMuscles); 
+vMtildemax = vMtilde_max*ones(1,auxdata.NMuscles);
+aTmin = -1*ones(1,auxdata.Ndof); 
+aTmax = 1*ones(1,auxdata.Ndof);
 switch study{2}
     case 'HipAnkle'
         aDmin = 0; aDmax = 1;
@@ -246,18 +287,26 @@ switch study{2}
         control_bounds_lower = [umin aTmin vMtildemin];
         control_bounds_upper = [umax aTmax vMtildemax];
 end
-bounds.phase.control.lower = control_bounds_lower; bounds.phase.control.upper = control_bounds_upper;
+bounds.phase.control.lower = control_bounds_lower; 
+bounds.phase.control.upper = control_bounds_upper;
 
 % States bounds
-actMin = a_min*ones(1,auxdata.NMuscles); actMax = a_max*ones(1,auxdata.NMuscles);
-lMtildemin = lMtilde_min*ones(1,auxdata.NMuscles); lMtildemax = lMtilde_max*ones(1,auxdata.NMuscles);
+actMin = a_min*ones(1,auxdata.NMuscles); 
+actMax = a_max*ones(1,auxdata.NMuscles);
+lMtildemin = lMtilde_min*ones(1,auxdata.NMuscles); 
+lMtildemax = lMtilde_max*ones(1,auxdata.NMuscles);
 states_bounds_lower = [actMin, lMtildemin];
 states_bounds_upper = [actMax, lMtildemax];
-bounds.phase.initialstate.lower = states_bounds_lower; bounds.phase.initialstate.upper = states_bounds_upper;
-bounds.phase.state.lower = states_bounds_lower; bounds.phase.state.upper = states_bounds_upper;
-bounds.phase.finalstate.lower = states_bounds_lower; bounds.phase.finalstate.upper = states_bounds_upper;
+bounds.phase.initialstate.lower = states_bounds_lower; 
+bounds.phase.initialstate.upper = states_bounds_upper;
+bounds.phase.state.lower = states_bounds_lower; 
+bounds.phase.state.upper = states_bounds_upper;
+bounds.phase.finalstate.lower = states_bounds_lower; 
+bounds.phase.finalstate.upper = states_bounds_upper;
+
 % Integral bounds
-bounds.phase.integral.lower = 0; bounds.phase.integral.upper = 10000*(tf-t0);
+bounds.phase.integral.lower = 0;
+bounds.phase.integral.upper = 10000*(tf-t0);
 
 % Parameter bounds
 switch study{2}
@@ -280,13 +329,28 @@ end
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
-bounds.phase.path.lower = [ID_bounds,HillEquil]; bounds.phase.path.upper = [ID_bounds,HillEquil];
+bounds.phase.path.lower = [ID_bounds,HillEquil];
+bounds.phase.path.upper = [ID_bounds,HillEquil];
+
+if Misc.ankle_clutched_spring
+    stiffness_lower = 0;
+    stiffness_upper = 1;
+    if Misc.ankle_clutched_spring_stiffness ~= -1
+        stiffness_lower = Misc.ankle_clutched_spring_stiffness;
+        stiffness_upper = Misc.ankle_clutched_spring_stiffness;
+    end
+    bounds.parameter.lower = [stiffness_lower, -0.5];
+    bounds.parameter.upper = [stiffness_upper, 0.5];
+end
 
 % Eventgroup
 % Impose mild periodicity
-pera_lower = -1 * ones(1, auxdata.NMuscles); pera_upper = 1 * ones(1, auxdata.NMuscles);
-perlMtilde_lower = -1*ones(1,auxdata.NMuscles); perlMtilde_upper = 1*ones(1,auxdata.NMuscles);
-bounds.eventgroup.lower = [pera_lower perlMtilde_lower]; bounds.eventgroup.upper = [pera_upper perlMtilde_upper];
+pera_lower = -1 * ones(1, auxdata.NMuscles);
+pera_upper = 1 * ones(1, auxdata.NMuscles);
+perlMtilde_lower = -1*ones(1,auxdata.NMuscles);
+perlMtilde_upper = 1*ones(1,auxdata.NMuscles);
+bounds.eventgroup.lower = [pera_lower perlMtilde_lower]; 
+bounds.eventgroup.upper = [pera_upper perlMtilde_upper];
 
 % Initial guess
 N = length(DatStore.time);
@@ -313,8 +377,10 @@ switch study{2}
         guess.parameter = 0;
     case 'HipAnkleMass'
         guess.parameter = 0;
-    otherwise
-        % No parameter case
+end
+
+if Misc.ankle_clutched_spring
+    guess.parameter = [0.5, 0];
 end
 
 % Empty exosuit force and torque data structures
@@ -481,6 +547,7 @@ for dof = 1:auxdata.Ndof
     end
     auxdata.JointIDSpline(dof) = spline(DatStore.time,DatStore.T_exp(:,dof));
     auxdata.JointEXOSpline(dof) = spline(DatStore.time,DatStore.T_exo(:,dof));
+    auxdata.JointIKSpline(dof) = spline(DatStore.time,DatStore.q_exp(:,dof));
 end
 
 for m = 1:auxdata.NMuscles
@@ -501,7 +568,7 @@ setup.derivatives.supplier = 'adigator';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-3;
-setup.mesh.maxiterations = 5;
+setup.mesh.maxiterations = 20;
 setup.mesh.colpointsmin = 3;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
@@ -511,20 +578,30 @@ setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
 setup.functions.continuous = str2func(['continous_lMtilde' tag]);
 setup.functions.endpoint = str2func(['endpoint_lMtilde' tag]);
+
     
 % ADiGator setup
 persistent splinestruct
 input.auxdata = auxdata;
-tdummy = guess.phase.time;
-splinestruct = SplineInputData(tdummy,input);
-splinenames = fieldnames(splinestruct);
-for Scount = 1:length(splinenames)
-  secdim = size(splinestruct.(splinenames{Scount}),2);
-  splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
-  splinestruct.(splinenames{Scount}) = zeros(0,secdim);
+
+pathLock='/tmp/adigator3.lock'
+% Try to create and lock this file.
+if ~system(sprintf('lockfile %s',pathLock))
+    % We succeeded, so perform some task which needs to be serialized.
+    tdummy = guess.phase.time;
+    splinestruct = SplineInputData(tdummy,input);
+    splinenames = fieldnames(splinestruct);
+    for Scount = 1:length(splinenames)
+        secdim = size(splinestruct.(splinenames{Scount}),2);
+        splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
+        splinestruct.(splinenames{Scount}) = zeros(0,secdim);
+    end
+    setup.auxdata.splinestruct = splinestructad;
+    adigatorGenFiles4gpops2(setup)
+
+    % Now remove the lockfile
+    system(sprintf('rm -f %s',pathLock));
 end
-setup.auxdata.splinestruct = splinestructad;
-adigatorGenFiles4gpops2(setup)
 
 setup.functions.continuous = str2func(['Wrap4continous_lMtilde' tag]);
 setup.adigatorgrd.continuous = str2func(['continous_lMtilde' tag 'GrdWrap']);
@@ -541,19 +618,21 @@ setup.adigatorhes.endpoint   = str2func(['endpoint_lMtilde' tag 'ADiGatorHes']);
 
 output = gpops2(setup);
 
-res=output.result.solution.phase(1);
-Time=res.time;
-MActivation=res.state(:,1:auxdata.NMuscles);
-lMtilde=res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
-lM=lMtilde.*(ones(length(Time),1)*DatStore.lOpt);
-MExcitation=res.control(:,1:auxdata.NMuscles);
-RActivation=res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
-MuscleNames=DatStore.MuscleNames;
-OptInfo=output;
+MuscleNames = DatStore.MuscleNames;
+res = output.result.solution.phase(1);
+Time = res.time;
+MActivation = res.state(:,1:auxdata.NMuscles);
+lMtilde = res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
+lM = lMtilde.*(ones(length(Time),1)*DatStore.lOpt);
+MExcitation = res.control(:,1:auxdata.NMuscles);
+RActivation = res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
+OptInfo = output;
 
 % Tendon force from lMtilde
 % Interpolation lMT
 lMTinterp = interp1(DatStore.time,DatStore.LMT,Time);
-[TForcetilde,TForce] = TendonForce_lMtilde(lMtilde,auxdata.params,lMTinterp);
+[TForcetilde,TForce] = TendonForce_lMtilde(...
+    lMtilde,auxdata.params,lMTinterp);
+
 end
 
