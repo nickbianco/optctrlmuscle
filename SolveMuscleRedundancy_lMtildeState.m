@@ -133,7 +133,7 @@ if isempty(ID_path) || ~exist(ID_path,'file')
         error('External loads file was not specified or does not exist, please add the path to the external loads file: Misc.Loads_path');
     else
         %check the output path for the ID results
-        if isfield(Misc,'ID_ResultsPath');
+        if isfield(Misc,'ID_ResultsPath')
             [idpath,~]=fileparts(Misc.ID_ResultsPath);
             if ~isdir(idpath); mkdir(idpath); end
         else 
@@ -365,7 +365,7 @@ DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 
 % Reproduce Quinlivan et al. 2017 study
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
-    disp('debug')
+    
     % Exosuit moment curves
     ExoCurves = load(['/Examples/SoftExosuitDesign/Quinlivan2017/' folder '/ExoCurves.mat']);
     exoTime = ExoCurves.time;
@@ -376,19 +376,25 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
     exoHipNormalizedMoment = ExoCurves.hm_norm;
 
     % Interpolate exosuit moments to match data
-    if Misc.exo_force_level    
-        exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
-        exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
-        for dof = 1:auxdata.Ndof
-            if strcmp('ankle_angle_r', DatStore.DOFNames{dof})
-                % Negative to match ankle_angle_r coord convention
-                DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time);    
-            elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
-                % Positive to match hip_flexion_r coord convention
-                DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);                
+    switch study{1}
+        case 'SoftExosuitDesign'
+            if Misc.exo_force_level
+                exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
+                exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
+                for dof = 1:auxdata.Ndof
+                    if strcmp('ankle_angle_r', DatStore.DOFNames{dof})
+                        % Negative to match ankle_angle_r coord convention
+                        DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time);
+                    elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+                        % Positive to match hip_flexion_r coord convention
+                        DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
+                    end
+                end
             end
-        end
+        case 'ISB2017'
+            % TODO
     end
+    
 end
 
 % "Tradeoff" struct

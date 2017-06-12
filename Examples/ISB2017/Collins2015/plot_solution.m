@@ -1,5 +1,7 @@
 import org.opensim.modeling.*
 
+addpath(genpath('../../../Analysis/'))
+
 numDOFs = DatStore.nDOF;
 numMuscles = DatStore.nMuscles;
 
