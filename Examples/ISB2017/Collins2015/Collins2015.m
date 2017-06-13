@@ -18,7 +18,7 @@ ID_path=fullfile(Datapath,'ID','inversedynamics.sto');
 %ID_path=[]; % compute ID from the external loads
 model_path=fullfile(Datapath,'subject01.osim');
 time=[0.7 1.4];     % Part of the right stance phase
-OutPath=fullfile(DirExample,'Results');
+OutPath=fullfile(DirCurrent,'Results');
 
 Misc.DofNames_Input={'ankle_angle_r','knee_angle_r','hip_flexion_r'};
 Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
@@ -28,5 +28,17 @@ Misc.costfun = 'Exc_Act';
 Misc.study = 'ISB2017/Collins2015';
 
 %% Solve the problem
-[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = ... 
-    SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+filename='Collins2017_MRS_solution_opt.mat';
+savepath=fullfile(DirCurrent,filename);
+save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
+        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
+    
+for i = 0.1:0.1:0.3
+    Misc.ankle_clutched_spring_stiffness = i;
+    [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+    filename=strcat('Collins2017_MRS_solution_spring_stiffness_',num2str(i),'.mat');
+    savepath=fullfile(DirCurrent,filename);
+    save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
+        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
+end

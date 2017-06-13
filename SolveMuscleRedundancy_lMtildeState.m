@@ -50,6 +50,20 @@ function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM
 % ----------------------------------------------------------------------- %
 
 % ----------------------------------------------------------------------- %
+% Based on study and cost function, decide which continuous and endpoint  % 
+% functions to use ------------------------------------------------------ %
+study = strsplit(Misc.study,'/');
+switch study{1}
+    case 'DeGroote2016'
+        tag = '';
+    case 'SoftExosuitDesign'
+        tag = ['Exo' study{2}];
+    case 'ISB2017'
+        tag = ['ISB' study{2}];
+end
+tag = [tag '_' Misc.costfun];
+
+% ----------------------------------------------------------------------- %
 % Check for optional input arguments, see manual for details------------- %
 
 % Default low-pass filter:
@@ -89,7 +103,7 @@ if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
 end
 % Cost Function
 if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
-   Misc.costfun='Exc';
+   Misc.costfun='Exc_Act';
 end
 % Which study?
 if ~isfield(Misc,'study') || isempty(Misc.study)
@@ -97,7 +111,7 @@ if ~isfield(Misc,'study') || isempty(Misc.study)
 end
 % Device force level for Quinlivan study
 if ~isfield(Misc,'exo_force_level') || isempty(Misc.exo_force_level)
-   Misc.exo_force_level = 0;
+   Misc.exo_force_level = -1;          
 end
 % Clutched spring stiffness for Collins study
 if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
@@ -105,31 +119,40 @@ if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutc
 end
 % Model mass
 if ~isfield(Misc,'model_mass') || isempty(Misc.model_mass)
-   Misc.model_mass = 1;
+   Misc.model_mass = -1;
 end
 % Variable tendon stiffness
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
     Misc.tendonStiffnessCoeff = 35;
 end
 
-% Based on study and cost function, decide which continuous and endpoint
-% functions to use
-study = strsplit(Misc.study,'/');
-switch study{1}
-    case 'DeGroote2016'
-        tag = '';
-    case 'SoftExosuitDesign'
-        tag = ['Exo' study{2}];
-    case 'ISB2017'
-        tag = ['ISB' study{2}];
+% ----------------------------------------------------------------------- %
+% Check that options are being specified correctly -----------------------%
+if strcmp(study{1},'SoftExosuitDesign')
+    errmsg = [study{1} ': must specify force level'];
+    assert(Misc.exo_force_level ~= -1,errmsg)
 end
-tag = [tag '_' Misc.costfun];
+
+if ~strcmp(study{1},'SoftExosuitDesign') && strcmp(study{2},'Collins2015')
+   errmsg = [study{1} '/' study{2} ': exosuit force level unused'];
+   assert(Misc.exo_force_level == -1,errmsg)
+end
+
+if ~strcmp(study{2},'Collins2015')
+    errmsg = [study{2} ': spring stiffness level unused'];
+    assert(Misc.ankle_clutched_spring_stiffness == -1, errmsg)
+end
+
+if strcmp(study{1},'SoftExosuitDesign') || strcmp(study{2},'Quinlivan2017')
+   errmsg = [study{2} ': must specify model mass'];
+   assert(Misc.model_mass ~= -1, errmsg)
+end
 
 % ------------------------------------------------------------------------%
 % Compute ID -------------------------------------------------------------%
 if isempty(ID_path) || ~exist(ID_path,'file')
     disp('ID path was not specified or the file does not exist, computation ID started');
-    if ~isfield(Misc,'Loads_path') || isempty(Misc.Loads_path) || ~exist(Misc.Loads_path,'file');
+    if ~isfield(Misc,'Loads_path') || isempty(Misc.Loads_path) || ~exist(Misc.Loads_path,'file')
         error('External loads file was not specified or does not exist, please add the path to the external loads file: Misc.Loads_path');
     else
         %check the output path for the ID results
@@ -305,7 +328,16 @@ switch study{2}
         bounds.parameter.lower = [stiffness_lower, -0.5];
         bounds.parameter.upper = [stiffness_upper, 0.5];
     case 'Quinlivan2017'
-        % TODO: optimize for scaling of biological exo profile?
+        force_level_lower = 0;
+        force_level_upper = 10;
+        if Misc.exo_force_level ~= -1
+            assert(Misc.exo_force_level >= 0 && ...
+                   Misc.exo_force_level <= 10);
+            force_level_lower = Misc.exo_force_level;
+            force_level_upper = Misc.exo_force_level;
+        end
+        bounds.parameter.lower = force_level_lower;
+        bounds.parameter.upper = force_level_upper;
 end
 
 % Path constraints
@@ -351,23 +383,25 @@ switch study{2}
     case 'Collins2015'
         guess.parameter = [0.5, 0];
     case 'Quinlivan2017'
-        % TODO
+        guess.parameter = 4;
 end
 
 % Collins et al. 2015 study, optimizing for spring stiffness
 if strcmp(study{2}, 'Collins2015')
     % TODO support separately clutching left and right leg.
-    auxdata.clutched_spring_dofs = strmatch('ankle_angle', DatStore.DOFNames);
+    auxdata.clutched_spring_dofs = contains(DatStore.DOFNames,'ankle_angle');
 end
 
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
+DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
 % Reproduce Quinlivan et al. 2017 study
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
-    
     % Exosuit moment curves
-    ExoCurves = load(['/Examples/SoftExosuitDesign/Quinlivan2017/' folder '/ExoCurves.mat']);
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     exoTime = ExoCurves.time;
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleMomentPeaks = ExoCurves.am_peak * Misc.model_mass;
@@ -382,19 +416,45 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                 exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
                 exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
                 for dof = 1:auxdata.Ndof
-                    if strcmp('ankle_angle_r', DatStore.DOFNames{dof})
+                    if contains(DatStore.DOFNames{dof},'ankle_angle')
                         % Negative to match ankle_angle_r coord convention
                         DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time);
-                    elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+                    elseif contains(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
                         DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
                     end
                 end
             end
         case 'ISB2017'
-            % TODO
-    end
-    
+            % Normalized curves at hip and ankle
+            % Linear regression on moment peaks for parameter optimization
+            %
+            % NOTE: interpolation scheme assumes that time range provided
+            %       in problem represents a full gait cycle
+            % TODO: find a way make this generic
+            if Misc.exo_force_level
+                for dof = 1:auxdata.Ndof
+                    if contains(DatStore.DOFNames{dof},'ankle_angle')
+                        % Negative to match ankle_angle_r coord convention
+                        DatStore.T_exo(:,dof) = -interp1(linspace(0,100,length(exoTime)), ...
+                            exoAnkleNormalizedMoment, ...
+                            linspace(0,100,length(DatStore.time)));
+                        X = 1:4;
+                        Y = exoAnkleMomentPeaks(1:4);
+                        DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
+                    elseif contains(DatStore.DOFNames{dof},'hip_flexion')
+                        % Positive to match hip_flexion_r coord convention
+                        DatStore.T_exo(:,dof) = -interp1(linspace(0,100,length(exoTime)), ...
+                            exoAnkleNormalizedMoment, ...
+                            linspace(0,100,length(DatStore.time)));
+                        X = 1:4;
+                        Y = exoHipMomentPeaks(1:4);
+                        DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
+                    end
+                end
+            end
+            auxdata.p_linreg = DatStore.p_linreg;
+    end   
 end
 
 % "Tradeoff" struct
@@ -415,11 +475,11 @@ if strcmp(study{2},'HipAnkle')
     if Misc.exo_force_level    
         exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
         for dof = 1:auxdata.Ndof
-            if strcmp('ankle_angle_r', DatStore.DOFNames{dof})
+            if contains(DatStore.DOFNames{dof}, 'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = -1;
-            elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+            elseif contains(DatStore.DOFNames{dof}, 'hip_flexion_r')
                 % Positive to match hip_flexion_r coord convention
                 DatStore.Fopt_exo(dof) = exoForce;
                 DatStore.tradeoff(dof) = 1;
@@ -444,15 +504,15 @@ if strcmp(study{2},'HipKneeAnkle')
     if Misc.exo_force_level    
         exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
         for dof = 1:auxdata.Ndof
-            if strcmp('ankle_angle_r', DatStore.DOFNames{dof})
+            if contains(DatStore.DOFNames{dof},'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = -1;
-            elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+            elseif contains(DatStore.DOFNames{dof},'hip_flexion')
                 % Positive to match hip_flexion_r coord convention
                 DatStore.Fopt_exo(dof) = exoForce;
                 DatStore.tradeoff(dof) = 1;
-            elseif strcmp('knee_angle_r', DatStore.DOFNames{dof})
+            elseif contains(DatStore.DOFNames{dof},'knee_angle')
                 DatStore.Fopt_exo_knee(dof) = exoForce;
             end
         end
@@ -475,11 +535,11 @@ if strcmp(study{2},'HipExtHipAbd')
     if Misc.exo_force_level    
         exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
         for dof = 1:auxdata.Ndof
-            if strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+            if contains(DatStore.DOFNames{dof},'hip_flexion')
                 % Negative to match hip_flexion_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = 1;
-            elseif strcmp('hip_adduction_r',DatStore.DOFNames{dof})
+            elseif contains(DatStore.DOFNames{dof},'hip_adduction')
                 % Negative to match hip_adduction_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = -1;
@@ -509,11 +569,11 @@ if strcmp(study{2},'HipAnkleMass')
         exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
         exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
         for dof = 1:auxdata.Ndof
-            if strcmp('ankle_angle_r', DatStore.DOFNames{dof})
+            if contains(DatStore.DOFNames{dof},'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time); 
                 DatStore.tradeoff(dof) = -1;
-            elseif strcmp('hip_flexion_r', DatStore.DOFNames{dof})
+            elseif contains(DatStore.DOFNames{dof},'hip_flexion')
                 % Positive to match hip_flexion_r coord convention
                 DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
                 DatStore.tradeoff(dof) = 1;

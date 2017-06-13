@@ -8,6 +8,7 @@ tauDeact        = input.auxdata.tauDeact;
 params          = input.auxdata.params;
 splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
+p_linreg        = input.auxdata.p_linreg;
 
 % Get controls
 e       = input.phase.control(:,1:NMuscles);
@@ -18,18 +19,23 @@ vMtilde = input.phase.control(:,NMuscles+Ndof+1:end);
 a       = input.phase.state(:,1:NMuscles);
 lMtilde = input.phase.state(:,NMuscles+1:end);
 
+% Get parameter
+exo_force_level = input.phase.parameter;
+
 % PATH CONSTRAINTS
 % Hill-equilibrium constraint
-[Hilldiff, F] = ForceEq_lMtildeStateISBQuinlivan2017_Exc_Act(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff, FT, ~, ~] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
 Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
-    T_exo=splinestruct.EXO(:,dof);
+    T_exo_norm=splinestruct.EXO(:,dof);
+    T_peak = p_linreg(1,dof)*exo_force_level + p_linreg(2,dof);
+    T_exo = T_peak.*T_exo_norm;
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof) + T_exo;
+    T_sim=sum(FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof) + T_exo;
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 

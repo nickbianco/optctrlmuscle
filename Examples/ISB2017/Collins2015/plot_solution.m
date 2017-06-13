@@ -85,7 +85,9 @@ rho = 1059.7; % Muscle density [kg/m^3]
 maxFiberVel = 12;  % Fiber-lengths per second
 
 lMT = interp1(DatStore.time,DatStore.LMT,time);
-[F,Fiso] = calcMuscleForcesDeGroote(a,lMtilde,vMtilde,lMT,auxdata);
+[~, ~, F, Fiso] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde, ...
+                         splinestruct.LMT,params,input.auxdata.Fvparam, ...
+                         input.auxdata.Fpparam,input.auxdata.Faparam);
 
 musc_energy_rate = NaN(numColPoints,numMuscles);
 for m = 1:numMuscles
@@ -115,7 +117,8 @@ for m = 1:numMuscles
     for i = 1:numColPoints
         Lce = lMtilde(i,m)*Lceopt;
         Vce = vMtilde(i,m)*VCEmax_mps;
-        heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F(i,m),Fiso(i,m),e(i,m),a(i,m),paramsUmb);
+        heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F(i,m),Fiso(i,m), ... 
+                                           e(i,m),a(i,m),paramsUmb);
     end
     
     musc_energy_rate(:,m) = heatRates(:,5) * mass;

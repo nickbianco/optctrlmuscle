@@ -2,7 +2,7 @@
 % All muscle-tendon characteristics are fully described in the publication
 % and its online supplement
 
-function [err, FT] = ForceEq_lMtildeISBCollins2015_Exc_Act(a,lMtilde,vMtilde,lMT,params,Fvparam,Fpparam,Faparam)
+function [err, FT, F, Fiso] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,lMT,params,Fvparam,Fpparam,Faparam)
 
 FMo = ones(size(a,1),1)*params(1,:);
 lMo = ones(size(a,1),1)*params(2,:);
@@ -71,5 +71,8 @@ FT = FMo.*fse;
 % Fm*cos(alpha) = Ft
 cos_alpha = (lMT-lT)./lM;
 err =  FM.*cos_alpha-fse;
+
+F = max(0,Fce);
+Fiso = max(0,FMltilde);
 
 end

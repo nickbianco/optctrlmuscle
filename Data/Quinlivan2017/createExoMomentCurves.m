@@ -1,6 +1,10 @@
 % Naming convention
 % af=ankle force, hf=hip force, am=ankle moment, hm=hip moment
 % 1=MAX 2=HIGH 3=MED 4=LOW
+
+% Shift hip peak?
+hip_shift = false;
+
 clear am_peak
 clear hm_peak
 clear af_peak
@@ -95,8 +99,15 @@ am_avg_01 = interp1(xd,am_avg,percent_01,'spline');
 hm_avg_01 = abs(interp1(xd,hm_avg,percent_01,'spline'));
 
 % shift over hm_avg by 0.7 seconds
-hm_norm=[zeros(1,7),hm_avg_01(1,1:length(hm_avg_01)-7)];
-am_norm=am_avg_01;
-time=time_01;
+if hip_shift
+    hm_norm=[zeros(1,7),hm_avg_01(1,1:length(hm_avg_01)-7)];
+    am_norm=am_avg_01;
+    time=time_01;
+    save('ExoCurves_HipShift.mat','am_norm','hm_norm','am_peak','hm_peak','af_peak','hf_peak','time')
+else
+    hm_norm=hm_avg_01;
+    am_norm=am_avg_01;
+    time=time_01;
+    save('ExoCurves.mat','am_norm','hm_norm','am_peak','hm_peak','af_peak','hf_peak','time')
+end
 
-save('ExoCurves.mat','am_norm','hm_norm','am_peak','hm_peak','af_peak','hf_peak','time')

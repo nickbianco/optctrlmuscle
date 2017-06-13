@@ -24,7 +24,7 @@ springRestAngle = input.phase.parameter(:, 2);
 
 % PATH CONSTRAINTS
 % Hill-equilibrium constraint
-[Hilldiff, F] = ForceEq_lMtildeISBCollins2015_Exc_Act(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff, FT, ~, ~] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
@@ -33,7 +33,7 @@ Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
+    T_sim=sum(FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     if any(dof == input.auxdata.clutched_spring_dofs)
         ankleAngle = -(splinestruct.IK(:,dof) - springRestAngle);
         T_sim = T_sim + maxSpringStiff * normSpringStiff .* ankleAngle;
