@@ -1,7 +1,9 @@
-function output = endpoint_lMtildeExoQ2017_Exc_Act_MinAlex(input)
+function output = endpoint_lMtilde_MinAlex(input)
 
 q = input.phase.integral;
-output.objective = q;
+t0 = input.auxdata.initialtime;
+tf = input.auxdata.finaltime;
+output.objective = q/(tf-t0);
 
 NMuscles = input.auxdata.NMuscles;
 

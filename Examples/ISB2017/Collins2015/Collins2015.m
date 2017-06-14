@@ -29,16 +29,33 @@ Misc.study = 'ISB2017/Collins2015';
 
 %% Solve the problem
 [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-filename='Collins2017_MRS_solution_opt.mat';
+ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
+filename='Collins2015_MRS_solution_opt.mat';
 savepath=fullfile(DirCurrent,filename);
 save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
-        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
+        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
     
 for i = 0.1:0.1:0.3
     Misc.ankle_clutched_spring_stiffness = i;
     [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-    filename=strcat('Collins2017_MRS_solution_spring_stiffness_',num2str(i),'.mat');
+    ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
+    filename=strcat('Collins2015_MRS_solution_spring_stiffness_',num2str(i),'.mat');
     savepath=fullfile(DirCurrent,filename);
     save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
-        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
+        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
+end
+
+function ExoTorques = getExoTorques(OptInfo,DatStore,Misc)
+
+q_exp = DatStore.q_exp;
+maxSpringStiff = 400; % N-m/rad.
+normSpringStiff = OptInfo.result.solution.parameter(1);
+springRestAngle = OptInfo.result.solution.parameter(2);
+for dof = 1:length(Misc.DofNames_Input)  
+    if contains(Misc.DofNames_Input{dof},'ankle_angle')
+        ankleAngle = -(q_exp(:,dof) - springRestAngle);
+        ExoTorques.ankle_angle = maxSpringStiff * normSpringStiff .* ankleAngle;
+    end   
+end
+
 end

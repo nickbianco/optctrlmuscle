@@ -1,4 +1,4 @@
-function phaseout = continous_lMtildeExoQuinlivan2017_MinAlexGrdWrap(input)
+function phaseout = continous_lMtilde_ExcGrdWrap(input)
 
 persistent splinestruct
 
@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = continous_lMtildeExoQuinlivan2017_MinAlexADiGatorGrd(input);
+phaseout = continous_lMtilde_ExcADiGatorGrd(input);

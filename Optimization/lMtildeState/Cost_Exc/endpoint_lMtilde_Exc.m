@@ -1,4 +1,4 @@
-function output = endpoint_lMtildeExoQuinlivan2017_MinAlex(input)
+function output = endpoint_lMtilde_Exc(input)
 
 q = input.phase.integral;
 output.objective = q;

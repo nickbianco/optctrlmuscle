@@ -1,4 +1,4 @@
-function phaseout = continous_lMtildeExoQuinlivan2017_Exc_Act(input)
+function phaseout = continous_lMtilde_Exc_Act(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -20,16 +20,15 @@ lMtilde = input.phase.state(:,NMuscles+1:end);
 
 % PATH CONSTRAINTS
 % Hill-equilibrium constraint
-[Hilldiff, F] = ForceEq_lMtildeExoQuinlivan2017_Exc_Act(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff, FT, ~, ~] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
 Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
-    T_exo=splinestruct.EXO(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof) + T_exo;
+    T_sim=sum(FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 

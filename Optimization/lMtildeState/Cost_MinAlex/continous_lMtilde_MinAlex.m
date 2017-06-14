@@ -1,4 +1,4 @@
-function phaseout = continous_lMtildeExoQ2017_Exc_Act_MinAlex(input)
+function phaseout = continous_lMtilde_MinAlex(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -20,16 +20,15 @@ lMtilde = input.phase.state(:,NMuscles+1:end);
 
 % PATH CONSTRAINTS
 % Hill-equilibrium constraint
-[Hilldiff, F] = ForceEq_lMtildeStateExoQ2017_Exc_Act_MinAlex(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff, FT, ~, ~] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
 Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
-    T_exo=splinestruct.EXO(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof) + T_exo;
+    T_sim=sum(FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 
@@ -58,13 +57,8 @@ for m = 1:NMuscles
     Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
 end
 
-m = 75;   % kg
-g = 9.81; % m/s^2
-v = 1.2;  % m/s
-
-wCOT = 1/(m*g*v); % Weight by cost of transport
 w1 = 1000;
-phaseout.integrand = sum(e.^2,2) + sum(a.^2,2) + wCOT.*sum(Edot,2) + w1.*sum(aT.^2,2);
+phaseout.integrand = sum(Edot,2) + w1.*sum(aT.^2,2);
 
 
 

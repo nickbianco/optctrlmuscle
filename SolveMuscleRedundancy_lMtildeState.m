@@ -389,7 +389,7 @@ end
 % Collins et al. 2015 study, optimizing for spring stiffness
 if strcmp(study{2}, 'Collins2015')
     % TODO support separately clutching left and right leg.
-    auxdata.clutched_spring_dofs = contains(DatStore.DOFNames,'ankle_angle');
+    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);
 end
 
 % Empty exosuit force and torque data structures
@@ -444,8 +444,8 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                         DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
                     elseif contains(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
-                        DatStore.T_exo(:,dof) = -interp1(linspace(0,100,length(exoTime)), ...
-                            exoAnkleNormalizedMoment, ...
+                        DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
+                            exoHipNormalizedMoment, ...
                             linspace(0,100,length(DatStore.time)));
                         X = 1:4;
                         Y = exoHipMomentPeaks(1:4);
