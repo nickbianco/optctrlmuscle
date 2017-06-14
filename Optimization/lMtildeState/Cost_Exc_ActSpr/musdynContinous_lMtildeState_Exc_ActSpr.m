@@ -29,16 +29,8 @@ end
 % Hill-equilibrium constraint
 [Hilldiff, F] = ForceEquilibrium_lMtildeState_Exc_ActSpr(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
-isStancePhase = input.auxdata.isStancePhase;
-%disp('DEBUGcont');
-%disp(length(input.phase.time))
-%disp(length(isStancePhase))
-%isStancePhase = zeros(numColPoints, 1);
-%for i = 1:numColPoints
-%    if input.phase.time(i) < input.auxdata.pushoff_time
-%        isStancePhase(i) = 1;
-%    end
-%end
+% Logistic function to turn off the spring in swing.
+isStancePhase = 1 ./ (1 + exp(100 * (input.phase.time - input.auxdata.pushoff_time)));
 
 
 % Moments constraint

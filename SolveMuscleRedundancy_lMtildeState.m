@@ -411,7 +411,6 @@ setup.functions.endpoint = str2func(['musdynEndpoint_lMtildeState_' Misc.costfun
     
 % ADiGator setup
 persistent splinestruct
-persistent isStancePhase
 input.auxdata = auxdata;
 
 if isunix
@@ -429,11 +428,6 @@ if isunix
                   splinestructad.(splinenames{Scount}) = adigatorCreateAuxInput([Inf,secdim]);
                   splinestruct.(splinenames{Scount}) = zeros(0,secdim);
                 end
-                if Misc.ankle_clutched_spring_stance_only ~= 0
-                    %isStancePhase = zeros(length(tdummy), 1);
-                    %isStancePhase(find(tdummy < input.auxdata.pushoff_time)) = 1;
-                    isStancePhasead = adigatorCreateAuxInput([Inf, 1]);
-                end
             elseif numPhases == 2
                 for ip = 1:numPhases
                     tdummy = guess.phase(ip).time;
@@ -449,9 +443,6 @@ if isunix
                 error('Invalid numPhases.');
             end
             setup.auxdata.splinestruct = splinestructad;
-            if Misc.ankle_clutched_spring_stance_only ~= 0
-                setup.auxdata.isStancePhase = isStancePhasead;
-            end
             adigatorGenFiles4gpops2(setup)
             % Now remove the lockfile
             system(sprintf('rm -f %s',pathLock));
@@ -473,11 +464,6 @@ elseif ispc
           splinestruct.(splinenames{Scount}) = zeros(0,secdim);
         end
 
-        if Misc.ankle_clutched_spring_stance_only ~= 0
-            %isStancePhase = zeros(length(tdummy), 1);
-            %isStancePhase(find(tdummy < input.auxdata.pushoff_time)) = 1;
-            isStancePhasead = adigatorCreateAuxInput([Inf, 1]);
-        end
     elseif numPhases == 2
         for ip = 1:numPhases
             tdummy = guess.phase(ip).time;
@@ -493,9 +479,6 @@ elseif ispc
         error('Invalid numPhases.');
     end
     setup.auxdata.splinestruct = splinestructad;
-    if Misc.ankle_clutched_spring_stance_only ~= 0
-        setup.auxdata.isStancePhase = isStancePhasead;
-    end
     adigatorGenFiles4gpops2(setup)
 else
     error('Platform unknown.');

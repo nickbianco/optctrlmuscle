@@ -19,3 +19,4 @@ end
 for m = 1:NMuscles
     [sstruct.LMT(:,m),sstruct.VMT(:,m),~] = SplineEval_ppuval(input.auxdata.LMTSpline(m),t,1);
 end
+
