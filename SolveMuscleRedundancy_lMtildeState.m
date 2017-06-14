@@ -332,8 +332,6 @@ end
 
 % Initial guess
 N = length(DatStore.time);
-disp('DEBUG initial guess length');
-disp(N);
 if numPhases == 1
     guess.phase.time = DatStore.time;
     guess.phase.control = [DatStore.SoAct ...
