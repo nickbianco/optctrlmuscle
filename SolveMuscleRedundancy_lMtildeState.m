@@ -117,9 +117,10 @@ end
 if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
     Misc.ankle_clutched_spring_stiffness = -1;
 end
-% Model mass
-if ~isfield(Misc,'model_mass') || isempty(Misc.model_mass)
-   Misc.model_mass = -1;
+% End of stance phase for Collins study
+if ~isfield(Misc, 'ankle_clutched_spring_pushoff_time') || ...
+        isempty(Misc.ankle_clutched_spring_pushoff_time)
+    Misc.ankle_clutched_spring_pushoff_time = NaN;
 end
 % Variable tendon stiffness
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
@@ -138,14 +139,14 @@ if ~strcmp(study{1},'SoftExosuitDesign') && strcmp(study{2},'Collins2015')
    assert(Misc.exo_force_level == -1,errmsg)
 end
 
+if strcmp(study{2},'Collins2015')
+    errmsg = [study{2} ': must specify pushoff time'];
+    assert(~isnan(Misc.ankle_clutched_spring_pushoff_time), errmsg)
+end
+
 if ~strcmp(study{2},'Collins2015')
     errmsg = [study{2} ': spring stiffness level unused'];
     assert(Misc.ankle_clutched_spring_stiffness == -1, errmsg)
-end
-
-if strcmp(study{1},'SoftExosuitDesign') || strcmp(study{2},'Quinlivan2017')
-   errmsg = [study{2} ': must specify model mass'];
-   assert(Misc.model_mass ~= -1, errmsg)
 end
 
 % ------------------------------------------------------------------------%
@@ -214,6 +215,12 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 % DatStore.time = DatStore.time;          % time window
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
+
+if ~isnan(Misc.ankle_clutched_spring_pushoff_time)
+    assert(time(1) < Misc.ankle_clutched_spring_pushoff_time && ...
+        Misc.ankle_clutched_spring_pushoff_time < time(2));
+    auxdata.pushoff_time = Misc.ankle_clutched_spring_pushoff_time;
+end
 
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
 for i = 1:auxdata.Ndof
@@ -396,6 +403,10 @@ end
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
+model = org.opensim.modeling.Model(model_path);
+state = model.initSystem();
+model_mass = model.getTotalMass(state);
+
 % Reproduce Quinlivan et al. 2017 study
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
     % Exosuit moment curves
@@ -404,9 +415,9 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
     ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     exoTime = ExoCurves.time;
     % Peaks are body mass normalized so multiply by model mass
-    exoAnkleMomentPeaks = ExoCurves.am_peak * Misc.model_mass;
+    exoAnkleMomentPeaks = ExoCurves.am_peak * model_mass;
     exoAnkleNormalizedMoment = ExoCurves.am_norm;
-    exoHipMomentPeaks = ExoCurves.hm_peak * Misc.model_mass;
+    exoHipMomentPeaks = ExoCurves.hm_peak * model_mass;
     exoHipNormalizedMoment = ExoCurves.hm_norm;
 
     % Interpolate exosuit moments to match data
@@ -416,10 +427,10 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                 exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
                 exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
                 for dof = 1:auxdata.Ndof
-                    if contains(DatStore.DOFNames{dof},'ankle_angle')
+                    if strfind(DatStore.DOFNames{dof},'ankle_angle')
                         % Negative to match ankle_angle_r coord convention
                         DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time);
-                    elseif contains(DatStore.DOFNames{dof},'hip_flexion')
+                    elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
                         DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
                     end
@@ -434,7 +445,7 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
             % TODO: find a way make this generic
             if Misc.exo_force_level
                 for dof = 1:auxdata.Ndof
-                    if contains(DatStore.DOFNames{dof},'ankle_angle')
+                    if strfind(DatStore.DOFNames{dof},'ankle_angle')
                         % Negative to match ankle_angle_r coord convention
                         DatStore.T_exo(:,dof) = -interp1(linspace(0,100,length(exoTime)), ...
                             exoAnkleNormalizedMoment, ...
@@ -442,7 +453,7 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                         X = 1:4;
                         Y = exoAnkleMomentPeaks(1:4);
                         DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
-                    elseif contains(DatStore.DOFNames{dof},'hip_flexion')
+                    elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
                         DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
                             exoHipNormalizedMoment, ...
@@ -469,17 +480,17 @@ if strcmp(study{2},'HipAnkle')
     % Exosuit moment curves
     ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
     % Peaks are body mass normalized so multiply by model mass
-    exoAnkleForcePeaks = ExoCurves.af_peak * Misc.model_mass;
+    exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
     % Interpolate exosuit moments to match data
     if Misc.exo_force_level    
         exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
         for dof = 1:auxdata.Ndof
-            if contains(DatStore.DOFNames{dof}, 'ankle_angle')
+            if strfind(DatStore.DOFNames{dof}, 'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = -1;
-            elseif contains(DatStore.DOFNames{dof}, 'hip_flexion_r')
+            elseif strfind(DatStore.DOFNames{dof}, 'hip_flexion')
                 % Positive to match hip_flexion_r coord convention
                 DatStore.Fopt_exo(dof) = exoForce;
                 DatStore.tradeoff(dof) = 1;
@@ -498,21 +509,21 @@ if strcmp(study{2},'HipKneeAnkle')
     % Exosuit moment curves
     ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
     % Peaks are body mass normalized so multiply by model mass
-    exoAnkleForcePeaks = ExoCurves.af_peak * Misc.model_mass;
+    exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
     % Interpolate exosuit moments to match data
     if Misc.exo_force_level    
         exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
         for dof = 1:auxdata.Ndof
-            if contains(DatStore.DOFNames{dof},'ankle_angle')
+            if strfind(DatStore.DOFNames{dof},'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = -1;
-            elseif contains(DatStore.DOFNames{dof},'hip_flexion')
+            elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                 % Positive to match hip_flexion_r coord convention
                 DatStore.Fopt_exo(dof) = exoForce;
                 DatStore.tradeoff(dof) = 1;
-            elseif contains(DatStore.DOFNames{dof},'knee_angle')
+            elseif strfind(DatStore.DOFNames{dof},'knee_angle')
                 DatStore.Fopt_exo_knee(dof) = exoForce;
             end
         end
@@ -529,17 +540,17 @@ if strcmp(study{2},'HipExtHipAbd')
     % Exosuit moment curves
     ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
     % Peaks are body mass normalized so multiply by model mass
-    exoAnkleForcePeaks = ExoCurves.af_peak * Misc.model_mass;
+    exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
     % Interpolate exosuit moments to match data
     if Misc.exo_force_level    
         exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
         for dof = 1:auxdata.Ndof
-            if contains(DatStore.DOFNames{dof},'hip_flexion')
+            if strfind(DatStore.DOFNames{dof},'hip_flexion')
                 % Negative to match hip_flexion_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = 1;
-            elseif contains(DatStore.DOFNames{dof},'hip_adduction')
+            elseif strfind(DatStore.DOFNames{dof},'hip_adduction')
                 % Negative to match hip_adduction_r coord convention
                 DatStore.Fopt_exo(dof) = -exoForce;
                 DatStore.tradeoff(dof) = -1;
@@ -559,9 +570,9 @@ if strcmp(study{2},'HipAnkleMass')
     ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkleMass/ExoCurves.mat');
     exoTime = ExoCurves.time;
     % Peaks are body mass normalized so multiply by model mass
-    exoAnkleMomentPeaks = ExoCurves.am_peak * Misc.model_mass;
+    exoAnkleMomentPeaks = ExoCurves.am_peak * model_mass;
     exoAnkleNormalizedMoment = ExoCurves.am_norm;
-    exoHipMomentPeaks = ExoCurves.hm_peak * Misc.model_mass;
+    exoHipMomentPeaks = ExoCurves.hm_peak * model_mass;
     exoHipNormalizedMoment = ExoCurves.hm_norm;
  
     % Interpolate exosuit moments to match data
@@ -569,11 +580,11 @@ if strcmp(study{2},'HipAnkleMass')
         exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
         exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
         for dof = 1:auxdata.Ndof
-            if contains(DatStore.DOFNames{dof},'ankle_angle')
+            if strfind(DatStore.DOFNames{dof},'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time); 
                 DatStore.tradeoff(dof) = -1;
-            elseif contains(DatStore.DOFNames{dof},'hip_flexion')
+            elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                 % Positive to match hip_flexion_r coord convention
                 DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
                 DatStore.tradeoff(dof) = 1;

@@ -1,3 +1,4 @@
+function Collins2015
 %% Example
 % add main folder and subfolder to matlab path (installation)
 filepath=which('Collins2015.m');
@@ -26,6 +27,7 @@ Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 % Optional Input Arguments
 Misc.costfun = 'Exc_Act';
 Misc.study = 'ISB2017/Collins2015';
+Misc.ankle_clutched_spring_pushoff_time = 1.0;
 
 %% Solve the problem
 [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
@@ -45,16 +47,23 @@ for i = 0.1:0.1:0.3
         'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
 end
 
+end
+
 function ExoTorques = getExoTorques(OptInfo,DatStore,Misc)
 
-q_exp = DatStore.q_exp;
+time = OptInfo.result.solution.phase.time;
+
+isStancePhase = 1 ./ (1 + exp(100 * (time - OptInfo.result.setup.auxdata.pushoff_time)));
+
+% TODO interpolate to use Time.
 maxSpringStiff = 400; % N-m/rad.
 normSpringStiff = OptInfo.result.solution.parameter(1);
 springRestAngle = OptInfo.result.solution.parameter(2);
 for dof = 1:length(Misc.DofNames_Input)  
-    if contains(Misc.DofNames_Input{dof},'ankle_angle')
-        ankleAngle = -(q_exp(:,dof) - springRestAngle);
-        ExoTorques.ankle_angle = maxSpringStiff * normSpringStiff .* ankleAngle;
+    if strfind(Misc.DofNames_Input{dof}, 'ankle_angle') == 1
+        jointAngle = pi / 180. * ppval(OptInfo.result.setup.auxdata.JointIKSpline(dof),time);
+        stretch = -(jointAngle - springRestAngle);
+        ExoTorques.ankle_angle = maxSpringStiff * normSpringStiff .* stretch .* isStancePhase;
     end   
 end
 

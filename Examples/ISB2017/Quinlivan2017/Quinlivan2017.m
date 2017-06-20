@@ -1,3 +1,5 @@
+function Quinlivan2017
+    
 clear all; close all; clc
 
 %% Example
@@ -49,7 +51,7 @@ savepath=fullfile(DirCurrent,filename);
 save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
         'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
        
-keyboard
+% keyboard
 
 for i = 1:4
     % Device force level
@@ -66,6 +68,8 @@ for i = 1:4
             'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
 end
 
+end
+
 function ExoTorques = getExoTorques(OptInfo,DatStore,Misc)
 
 auxdata = OptInfo.result.setup.auxdata;
@@ -74,9 +78,9 @@ exo_force_level = OptInfo.result.solution.parameter;
 for dof = 1:length(Misc.DofNames_Input)
     exoPeak = p(1,dof)*exo_force_level + p(2,dof);
     exoNormTorque = DatStore.T_exo(:,dof);
-    if contains(Misc.DofNames_Input{dof},'ankle_angle')
+    if strfind(Misc.DofNames_Input{dof},'ankle_angle')
         ExoTorques.ankle_angle = exoPeak*exoNormTorque;
-    elseif contains(Misc.DofNames_Input{dof},'hip_flexion')
+    elseif strfind(Misc.DofNames_Input{dof},'hip_flexion')
         ExoTorques.hip_flexion = exoPeak*exoNormTorque;
     end   
 end

@@ -26,6 +26,9 @@ springRestAngle = input.phase.parameter(:, 2);
 % Hill-equilibrium constraint
 [Hilldiff, FT, ~, ~] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
+% Logistic function to turn off the spring in swing.
+isStancePhase = 1 ./ (1 + exp(100 * (input.phase.time - input.auxdata.pushoff_time)));
+
 % Moments constraint
 Topt = 150;
 maxSpringStiff = 400; % N-m/rad.
@@ -35,8 +38,8 @@ for dof = 1:Ndof
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
     T_sim=sum(FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     if any(dof == input.auxdata.clutched_spring_dofs)
-        ankleAngle = -(splinestruct.IK(:,dof) - springRestAngle);
-        T_sim = T_sim + maxSpringStiff * normSpringStiff .* ankleAngle;
+        springStretch = -(splinestruct.IK(:,dof) - springRestAngle);
+        T_sim = T_sim + maxSpringStiff * normSpringStiff .* springStretch .* isStancePhase;
     end
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
