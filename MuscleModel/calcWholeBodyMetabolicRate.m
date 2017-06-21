@@ -19,7 +19,8 @@ state = OptInfo.result.solution.phase.state;
 e       = control(:,1:numMuscles); 
 %    e(e<0)=0;
 if any(any(e < 0))
-    if any(any(e < -0.05))
+    if any(any(e < -0.1))
+        e(e < -0.1)
         error('VERY negative excitation!');
     else
         warning('Slightly negative excitation...clipping at 0.');
@@ -27,7 +28,8 @@ if any(any(e < 0))
     end
 end
 if any(any(e > 1))
-    if any(any(e > 1.05))
+    if any(any(e > 1.1))
+        e(e > 1.1)
         error('Excitation much greater than 1!');
     else
         warning('Excitation slightly greater than 1...clipping at 1.');
