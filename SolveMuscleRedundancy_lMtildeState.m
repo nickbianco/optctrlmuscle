@@ -52,6 +52,9 @@ function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM
 % ----------------------------------------------------------------------- %
 % Based on study and cost function, decide which continuous and endpoint  % 
 % functions to use ------------------------------------------------------ %
+if ~isfield(Misc, 'study') || isempty(Misc.study)
+    Misc.study = 'DeGroote2016/';
+end
 study = strsplit(Misc.study,'/');
 switch study{1}
     case 'DeGroote2016'
@@ -453,6 +456,17 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                         X = 1:4;
                         Y = exoAnkleMomentPeaks(1:4);
                         DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
+                        % Output peak assistive force at ankle in %BW to use
+                        % for abscissa in plots.
+                        disp('ISB2017/Quinlivan2017 force levels (%BW):');
+                        fprintf('slope: %f; intercept: %f\n', ...
+                            DatStore.p_linreg(1,dof) / model_mass, ...
+                            DatStore.p_linreg(2,dof) / model_mass);
+                        for fl = 1:10
+                            fprintf('force level %i: %f\n', fl, ...
+                                (DatStore.p_linreg(1,dof)*fl + ...
+                                DatStore.p_linreg(2,dof)) / model_mass);
+                        end
                     elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
                         DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
