@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = musdynContinous_lMtildeState_Exc_ActADiGatorHes(input);
+phaseout = continous_lMtilde_Exc_ActADiGatorHes(input);
