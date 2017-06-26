@@ -125,6 +125,10 @@ if ~isfield(Misc, 'ankle_clutched_spring_pushoff_time') || ...
         isempty(Misc.ankle_clutched_spring_pushoff_time)
     Misc.ankle_clutched_spring_pushoff_time = NaN;
 end
+% Fixed spring rest length for Collins study
+if ~isfield(Misc, 'fixed_rest_length') || isempty(Misc.fixed_rest_length)
+    Misc.fixed_rest_length = true; 
+end
 % Variable tendon stiffness
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
     Misc.tendonStiffnessCoeff = 35;
@@ -219,10 +223,45 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
 
-if ~isnan(Misc.ankle_clutched_spring_pushoff_time)
-    assert(time(1) < Misc.ankle_clutched_spring_pushoff_time && ...
-        Misc.ankle_clutched_spring_pushoff_time < time(2));
-    auxdata.pushoff_time = Misc.ankle_clutched_spring_pushoff_time;
+% Collins et al. 2015 study, optimizing for spring stiffness
+if strcmp(study{2}, 'Collins2015')
+    
+    % Find clutched spring DOFs
+    % TODO: support separately clutching left and right leg.
+    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);  
+    
+    % Check that specified pushoff time occurs within gait cycle
+    if ~isnan(Misc.ankle_clutched_spring_pushoff_time)
+        assert(time(1) < Misc.ankle_clutched_spring_pushoff_time && ...
+            Misc.ankle_clutched_spring_pushoff_time < time(2));
+        auxdata.pushoff_time = Misc.ankle_clutched_spring_pushoff_time;
+    end
+      
+    % Find fixed rest length based on first ankle angle peak after
+    % heel strike
+    if Misc.fixed_rest_length
+        errmsg = 'Fixing spring stiffness only supported for one DOF assistance';
+        assert(length(auxdata.clutched_spring_dofs)==1,errmsg)
+        
+        % Flip sign to match convention in Collins et al. 2015 study
+        ankleAngle = -DatStore.q_exp(:,auxdata.clutched_spring_dofs);
+        
+        % To set fixed rest length, find first ankle angle peak 
+        % within first ~40% of gait cycle
+        percentGC = 0.4;
+        [restLength,firstPeakIdx] = max(ankleAngle(1:floor(percentGC*length(ankleAngle))));
+        auxdata.rest_length_first_peak = DatStore.time(firstPeakIdx);
+        
+        % Find where the rest length is reached after spring recoil
+        [~,minIdx] = min(ankleAngle);
+        [~,maxIdx] = max(ankleAngle);
+        [~,idx] = min(abs(restLength-ankleAngle(minIdx:maxIdx)));
+        restLengthAfterRecoilIdx = idx+minIdx-1;
+        auxdata.rest_length_after_recoil = DatStore.time(restLengthAfterRecoilIdx);
+        
+        % Save rest length (in radians)
+        auxdata.rest_length = restLength * (pi/180);
+    end
 end
 
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
@@ -335,8 +374,14 @@ switch study{2}
             stiffness_lower = Misc.ankle_clutched_spring_stiffness;
             stiffness_upper = Misc.ankle_clutched_spring_stiffness;
         end
-        bounds.parameter.lower = [stiffness_lower, -0.5];
-        bounds.parameter.upper = [stiffness_upper, 0.5];
+        rest_length_lower = -0.5;
+        rest_length_upper = 0.5;
+%         if Misc.fixed_rest_length
+%             rest_length_lower = auxdata.rest_length;
+%             rest_length_upper = auxdata.rest_length;
+%         end
+        bounds.parameter.lower = [stiffness_lower, rest_length_lower];
+        bounds.parameter.upper = [stiffness_upper, rest_length_upper];
     case 'Quinlivan2017'
         force_level_lower = 0;
         force_level_upper = 10;
@@ -394,12 +439,6 @@ switch study{2}
         guess.parameter = [0.5, 0];
     case 'Quinlivan2017'
         guess.parameter = 4;
-end
-
-% Collins et al. 2015 study, optimizing for spring stiffness
-if strcmp(study{2}, 'Collins2015')
-    % TODO support separately clutching left and right leg.
-    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);
 end
 
 % Empty exosuit force and torque data structures
@@ -488,7 +527,7 @@ end
 DatStore.tradeoff = zeros(auxdata.Ndof,1);
 
 % Given one actuator, compare tradeoff between hip flexion and ankle 
-%  plantarflexion assistance
+% plantarflexion assistance
 DatStore.Fopt_exo = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipAnkle') 
     % Exosuit moment curves
