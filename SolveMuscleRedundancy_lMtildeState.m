@@ -120,11 +120,6 @@ end
 if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
     Misc.ankle_clutched_spring_stiffness = -1;
 end
-% End of stance phase for Collins study
-if ~isfield(Misc, 'ankle_clutched_spring_pushoff_time') || ...
-        isempty(Misc.ankle_clutched_spring_pushoff_time)
-    Misc.ankle_clutched_spring_pushoff_time = NaN;
-end
 % Fixed spring rest length for Collins study
 if ~isfield(Misc, 'fixed_rest_length') || isempty(Misc.fixed_rest_length)
     Misc.fixed_rest_length = true; 
@@ -144,11 +139,6 @@ end
 if ~strcmp(study{1},'SoftExosuitDesign') && strcmp(study{2},'Collins2015')
    errmsg = [study{1} '/' study{2} ': exosuit force level unused'];
    assert(Misc.exo_force_level == -1,errmsg)
-end
-
-if strcmp(study{2},'Collins2015')
-    errmsg = [study{2} ': must specify pushoff time'];
-    assert(~isnan(Misc.ankle_clutched_spring_pushoff_time), errmsg)
 end
 
 if ~strcmp(study{2},'Collins2015')
@@ -229,13 +219,6 @@ if strcmp(study{2}, 'Collins2015')
     % Find clutched spring DOFs
     % TODO: support separately clutching left and right leg.
     auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);  
-    
-    % Check that specified pushoff time occurs within gait cycle
-    if ~isnan(Misc.ankle_clutched_spring_pushoff_time)
-        assert(time(1) < Misc.ankle_clutched_spring_pushoff_time && ...
-            Misc.ankle_clutched_spring_pushoff_time < time(2));
-        auxdata.pushoff_time = Misc.ankle_clutched_spring_pushoff_time;
-    end
       
     % Find fixed rest length based on first ankle angle peak after
     % heel strike
@@ -261,6 +244,8 @@ if strcmp(study{2}, 'Collins2015')
         
         % Save rest length (in radians)
         auxdata.rest_length = restLength * (pi/180);
+        fprintf('Spring is active in [%f, %f].\n', ...
+            auxdata.rest_length_first_peak, auxdata.rest_length_after_recoil);
     end
 end
 
@@ -376,10 +361,10 @@ switch study{2}
         end
         rest_length_lower = -0.5;
         rest_length_upper = 0.5;
-%         if Misc.fixed_rest_length
-%             rest_length_lower = auxdata.rest_length;
-%             rest_length_upper = auxdata.rest_length;
-%         end
+        if Misc.fixed_rest_length
+            rest_length_lower = auxdata.rest_length;
+            rest_length_upper = auxdata.rest_length;
+        end
         bounds.parameter.lower = [stiffness_lower, rest_length_lower];
         bounds.parameter.upper = [stiffness_upper, rest_length_upper];
     case 'Quinlivan2017'
