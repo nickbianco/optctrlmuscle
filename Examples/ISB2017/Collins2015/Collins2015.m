@@ -28,6 +28,7 @@ Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 Misc.costfun = 'Exc_Act';
 Misc.study = 'ISB2017/Collins2015';
 Misc.ankle_clutched_spring_pushoff_time = 1.0;
+Misc.fixed_rest_length = true;
 
 %% Solve the problem
 [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);

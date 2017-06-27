@@ -26,8 +26,22 @@ springRestAngle = input.phase.parameter(:, 2);
 % Hill-equilibrium constraint
 [Hilldiff, FT, ~, ~] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,splinestruct.LMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
-% Logistic function to turn off the spring in swing.
-isStancePhase = 1 ./ (1 + exp(100 * (input.phase.time - input.auxdata.pushoff_time)));
+% Use composition of logistic functions to turn off the spring when not 
+% active
+%
+% The first logistic function transitions from "off-to-on" when the 
+% first peak in the ankle ankle is reached, which is when the spring begins 
+% to stretch. The second logistic function transitions from "on-to-off"
+% when the rest length in the spring is reached after the spring recoils to
+% deliver assistance before pushoff, which is when the string attached to 
+% the spring begins to take on slack, ensuring a uni-directional 
+% assistance.
+first_peak = input.auxdata.rest_length_first_peak;
+after_recoil = input.auxdata.rest_length_after_recoil;
+beginSpringStretching = 1 ./ (1 + exp(100 * (first_peak  - input.phase.time)));
+restLengthReached = 1 ./ (1 + exp(100 * (input.phase.time - after_recoil)));
+
+isSpringActive = beginSpringStretching .* restLengthReached;
 
 % Moments constraint
 Topt = 150;
@@ -39,7 +53,7 @@ for dof = 1:Ndof
     T_sim=sum(FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     if any(dof == input.auxdata.clutched_spring_dofs)
         springStretch = -(splinestruct.IK(:,dof) - springRestAngle);
-        T_sim = T_sim + maxSpringStiff * normSpringStiff .* springStretch .* isStancePhase;
+        T_sim = T_sim + maxSpringStiff * normSpringStiff .* springStretch .* isSpringActive;
     end
     Tdiff(:,dof) =  (T_exp-T_sim);
 end

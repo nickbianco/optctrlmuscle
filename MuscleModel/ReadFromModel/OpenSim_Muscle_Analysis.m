@@ -26,11 +26,13 @@ tool.setCoordinatesFileName(motion_file);
 %     tool.print(out_path_xml);
 %     tool.run;
 % else
+    
     [results_dir,~] = fileparts(output_path);
-    if ~exist(results_dir, 'dir')
+    curr_dir = fileparts(mfilename('fullpath'));
+    if ~exist(fullfile(curr_dir,results_dir), 'dir')
         mkdir(results_dir)
     end
-    if ~exist(output_path, 'dir')
+    if ~exist(fullfile(curr_dir,output_path), 'dir')
         mkdir(output_path)
     end
     
