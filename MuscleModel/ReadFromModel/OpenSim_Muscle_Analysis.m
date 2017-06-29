@@ -36,7 +36,7 @@ tool.setCoordinatesFileName(motion_file);
         mkdir(output_path)
     end
     
-    out_path_xml=fullfile(['muscle_analysis_' name '.xml']);
+    out_path_xml=fullfile(output_path, ['muscle_analysis_' name '.xml']);
     tool.print(out_path_xml);
     %tool_deserialized = AnalyzeTool(out_path_xml);
     %tool_deserialized.run();
