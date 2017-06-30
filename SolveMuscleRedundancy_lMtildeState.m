@@ -739,7 +739,18 @@ OptInfo = output;
 % Interpolation lMT
 lMTinterp = interp1(DatStore.time,DatStore.LMT,Time);
 [TForcetilde,TForce] = TendonForce_lMtilde(...
-    lMtilde,auxdata.params,lMTinterp);
+    lMtilde,auxdata.params,auxdata.Fpparam,lMTinterp);
+
+if strcmp(study{1},'ISB2017')
+    if strcmp(study{2},'Quinlivan2017') && strcmp(Misc.costfun, 'Exc_Act')
+        DatStore.ExoTorques = calcExoTorques_lMtildeISBQuinlivan2017_Exc_Act(...
+            OptInfo, DatStore);
+    elseif strcmp(study{2},'Collins2015') && strcmp(Misc.costfun, 'Exc_Act')
+        DatStore.ExoTorques = calcExoTorques_lMtildeISBCollins2015_Exc_Act(...
+            OptInfo, DatStore);
+    end
+end
+
 
 end
 
