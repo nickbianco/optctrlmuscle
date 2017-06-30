@@ -491,6 +491,10 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                                 (DatStore.p_linreg(1,dof)*fl + ...
                                 DatStore.p_linreg(2,dof)) / model_mass);
                         end
+                        for mp = 1:length(ExoCurves.am_peak)
+                            fprintf('exo ankle moment peaks mass-norm: %f', ...
+                                ExoCurves.am_peak(mp));
+                        end
                     elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
                         DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
