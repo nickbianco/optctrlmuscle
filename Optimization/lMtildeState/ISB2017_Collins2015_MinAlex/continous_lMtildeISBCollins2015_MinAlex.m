@@ -79,8 +79,7 @@ vmax = params(5,:);
 Fo = params(1,:);   
 Edot = zeros(numColPoints,NMuscles);
 for m = 1:NMuscles
-    v = vmax(1,m)*vMtilde(:,m);
-    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
+    Edot(:,m) = calcMinettiAlexanderProbe(vMtilde(:,m),vmax(1,m),Fo(1,m),a(:,m));
 end
 
 w1 = 1000;
