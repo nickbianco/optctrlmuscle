@@ -679,7 +679,12 @@ input.auxdata = auxdata;
 if isunix
     pathLock='/tmp/adigator3.lock'
     % Try to create and lock this file.
-    if ~system(sprintf('lockfile %s',pathLock))
+    if ismac
+        lockfilecommand = 'dotlockfile'; % Get from homebrew.
+    else
+        lockfilecommand = 'lockfile';
+    end
+    if ~system(sprintf('%s %s',lockfilecommand, pathLock))
         % We succeeded, so perform some task which needs to be serialized.
         tdummy = guess.phase.time;
         splinestruct = SplineInputData(tdummy,input);
