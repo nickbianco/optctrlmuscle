@@ -243,9 +243,11 @@ if strcmp(study{2}, 'Collins2015')
         auxdata.rest_length_after_recoil = DatStore.time(restLengthAfterRecoilIdx);
         
         % Save rest length (in radians)
-        auxdata.rest_length = restLength * (pi/180);
-        fprintf('Spring is active in [%f, %f].\n', ...
-            auxdata.rest_length_first_peak, auxdata.rest_length_after_recoil);
+        auxdata.rest_length = -restLength * (pi/180);
+        fprintf('Spring is active in [%f, %f], with rest length %f.\n', ...
+            auxdata.rest_length_first_peak, ...
+            auxdata.rest_length_after_recoil, ...
+            -restLength);
     end
 end
 
