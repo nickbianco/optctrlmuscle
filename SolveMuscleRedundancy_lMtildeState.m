@@ -494,8 +494,8 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                                 DatStore.p_linreg(2,dof)) / model_mass);
                         end
                         for mp = 1:length(ExoCurves.am_peak)
-                            fprintf('exo ankle moment peaks mass-norm: %f', ...
-                                ExoCurves.am_peak(mp));
+                            fprintf('exo ankle moment peaks mass-norm %i: %f\n', ...
+                                    mp, ExoCurves.am_peak(mp));
                         end
                     elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                         % Positive to match hip_flexion_r coord convention
@@ -667,12 +667,12 @@ setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-3;
 setup.mesh.maxiterations = 20;
-setup.mesh.colpointsmin = 3;
+setup.mesh.colpointsmin = 5;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
 setup.displaylevel = 2;
 NMeshIntervals = round((tf-t0)*Misc.Mesh_Frequency);
-setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
+setup.mesh.phase.colpoints = 5*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
 setup.functions.continuous = str2func(['continous_lMtilde' tag]);
 setup.functions.endpoint = str2func(['endpoint_lMtilde' tag]);
