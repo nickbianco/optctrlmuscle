@@ -13,7 +13,7 @@ osimModel=Model(model_sel);
 tool.setModel(osimModel);
 tool.setResultsDir(output_path);
 tool.setInitialTime(event(1));
-tool.setFinalTime(event(2));
+tool.setFinalTime(event(2) + 0.01);
 [~, name, ~]=fileparts(motion_file);
 tool.setName(name);
 
