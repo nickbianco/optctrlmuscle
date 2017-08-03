@@ -63,6 +63,8 @@ switch study{1}
         tag = ['Exo' study{2}];
     case 'ISB2017'
         tag = ['ISB' study{2}];
+    case 'SynergyControl'
+        tag = ['Syn' study{2}];
 end
 tag = [tag '_' Misc.costfun];
 
@@ -127,6 +129,10 @@ end
 % Variable tendon stiffness
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
     Misc.tendonStiffnessCoeff = 35;
+end
+% Synergy control structure option
+if ~isfield(Misc, 'synergy_control') || isempty(Misc.synergy_control)
+   Misc.synergy_control = 0; 
 end
 
 % ----------------------------------------------------------------------- %
@@ -294,8 +300,17 @@ auxdata.initialtime = t0;
 auxdata.finaltime = tf;
 
 % Controls bounds
-umin = e_min*ones(1,auxdata.NMuscles); 
-umax = e_max*ones(1,auxdata.NMuscles);
+if Misc.synergy_control
+    numControls = Misc.synergy_control;
+    umin = e_min*ones(1,numControls); 
+    umax = Inf*ones(1,numControls);
+else
+    numControls = auxdata.NMuscles;
+    umin = e_min*ones(1,numControls); 
+    umax = e_max*ones(1,numControls);
+end
+auxdata.numControls = numControls;
+
 vMtildemin = vMtilde_min*ones(1,auxdata.NMuscles); 
 vMtildemax = vMtilde_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); 
@@ -317,6 +332,7 @@ switch study{2}
         control_bounds_lower = [umin aTmin vMtildemin];
         control_bounds_upper = [umax aTmax vMtildemax];
 end
+
 bounds.phase.control.lower = control_bounds_lower; 
 bounds.phase.control.upper = control_bounds_upper;
 
@@ -341,17 +357,17 @@ bounds.phase.integral.upper = 10000*(tf-t0);
 % Parameter bounds
 switch study{2}
     case 'HipAnkle'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
+        parameter_lower = -1.0;
+        parameter_upper = 1.0;
     case 'HipKneeAnkle'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
+        parameter_lower = -1.0;
+        parameter_upper = 1.0;
     case 'HipExtHipAbd'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
+        parameter_lower = -1.0;
+        parameter_upper = 1.0;
     case 'HipAnkleMass'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
+        parameter_lower = -1.0;
+        parameter_upper = 1.0;
     case 'Collins2015'
         stiffness_lower = 0;
         stiffness_upper = 1;
@@ -367,8 +383,8 @@ switch study{2}
             rest_length_lower = auxdata.rest_length;
             rest_length_upper = auxdata.rest_length;
         end
-        bounds.parameter.lower = [stiffness_lower, rest_length_lower];
-        bounds.parameter.upper = [stiffness_upper, rest_length_upper];
+        parameter_lower = [stiffness_lower, rest_length_lower];
+        parameter_upper = [stiffness_upper, rest_length_upper];
     case 'Quinlivan2017'
         force_level_lower = 0;
         force_level_upper = 10;
@@ -378,15 +394,32 @@ switch study{2}
             force_level_lower = Misc.exo_force_level;
             force_level_upper = Misc.exo_force_level;
         end
-        bounds.parameter.lower = force_level_lower;
-        bounds.parameter.upper = force_level_upper;
+        parameter_lower = force_level_lower;
+        parameter_upper = force_level_upper;
 end
+
+if Misc.synergy_control
+    synergyVectors = ones(1, numControls*auxdata.NMuscles);
+    parameter_lower = [parameter_lower e_min*synergyVectors];
+    parameter_upper = [parameter_upper Inf*synergyVectors];
+end
+
+bounds.parameter.lower = parameter_lower;
+bounds.parameter.upper = parameter_upper;
 
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
-bounds.phase.path.lower = [ID_bounds,HillEquil];
-bounds.phase.path.upper = [ID_bounds,HillEquil];
+path_lower = [ID_bounds,HillEquil];
+path_upper = [ID_bounds,HillEquil];
+
+if Misc.synergy_control
+    path_lower = [path_lower ones(1, numControls)];
+    path_upper = [path_upper ones(1, numControls)];
+end
+
+bounds.phase.path.lower = path_lower;
+bounds.phase.path.upper = path_upper;
 
 % Eventgroup
 % Impose mild periodicity
@@ -415,18 +448,24 @@ guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
 guess.phase.integral = 0;
 switch study{2}
     case 'HipAnkle'
-        guess.parameter = 0;
+        parameter_guess = 0;
     case 'HipKneeAnkle'
-        guess.parameter = 0;
+        parameter_guess = 0;
     case 'HipExtHipAbd'
-        guess.parameter = 0;
+        parameter_guess = 0;
     case 'HipAnkleMass'
-        guess.parameter = 0;
+        parameter_guess = 0;
     case 'Collins2015'
-        guess.parameter = [0.5, 0];
+        parameter_guess = [0.5, 0];
     case 'Quinlivan2017'
-        guess.parameter = 4;
+        parameter_guess = 4;
 end
+
+if Misc.synergy_control
+    parameter_guess = [parameter_guess 0.5*synergyVectors];
+end
+
+guess.parameter = parameter_guess;
 
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
