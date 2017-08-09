@@ -1,10 +1,10 @@
 function [FM, lMtilde, FMactFL, FMactFV, FMpas, cos_alpha] = HillModel_RigidTendon(a,lMT,vMT,Parameters,ActiveFVParameters,PassiveFLParameters,Faparam)
 
-Fmax = Parameters(1,:);
-lMopt = Parameters(2,:);
-lTs = Parameters(3,:);
-alphaopt = Parameters(4,:);
-vMmax  = Parameters(5,:);
+Fmax = Parameters(1);
+lMopt = Parameters(2);
+lTs = Parameters(3);
+alphaopt = Parameters(4);
+vMmax  = Parameters(5);
 
 % Hill-type muscle model: geometric relationships
 w = lMopt.*sin(alphaopt);

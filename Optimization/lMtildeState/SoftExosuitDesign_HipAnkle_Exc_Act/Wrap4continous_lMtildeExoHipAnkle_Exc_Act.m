@@ -1,4 +1,4 @@
-function phaseout = Wrap4continous_lMtildeSynHipAnkle_Exc_Act(input)
+function phaseout = Wrap4continous_lMtildeExoHipAnkle_Exc_Act(input)
 
 persistent splinestruct
 
@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = continous_lMtildeSynHipAnkle_Exc_Act(input);
+phaseout = continous_lMtildeExoHipAnkle_Exc_Act(input);

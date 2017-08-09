@@ -1,0 +1,32 @@
+# Vim backup files.
+.*.swo
+.*.swp
+
+# Generated when running GPOPS-II.
+*IPOPTinfo.txt
+*ADiGatorGrd.m*
+*ADiGatorHes.m*
+
+# Generated when running MuscleRedundancySolver.
+MuscleAnalysis/
+
+# Generated when running OpenSim.
+err.log
+out.log
+
+# MATLAB files
+*.asv
+*.mat
+
+# OpenSim files
+*.sto
+*.mot
+*.xml
+*.osim
+
+# Image files
+*.emf
+*.eps
+*.jpg
+*.png
+

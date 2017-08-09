@@ -303,7 +303,7 @@ auxdata.finaltime = tf;
 if Misc.synergy_control
     numControls = Misc.synergy_control;
     umin = e_min*ones(1,numControls); 
-    umax = Inf*ones(1,numControls);
+    umax = e_max*ones(1,numControls);
 else
     numControls = auxdata.NMuscles;
     umin = e_min*ones(1,numControls); 
@@ -399,9 +399,8 @@ switch study{2}
 end
 
 if Misc.synergy_control
-    synergyVectors = ones(1, numControls*auxdata.NMuscles);
-    parameter_lower = [parameter_lower e_min*synergyVectors];
-    parameter_upper = [parameter_upper Inf*synergyVectors];
+    parameter_lower = [parameter_lower e_min*ones(1, numControls*auxdata.NMuscles)];
+    parameter_upper = [parameter_upper e_max*ones(1, numControls*auxdata.NMuscles)];
 end
 
 bounds.parameter.lower = parameter_lower;
@@ -431,17 +430,24 @@ bounds.eventgroup.lower = [pera_lower perlMtilde_lower];
 bounds.eventgroup.upper = [pera_upper perlMtilde_upper];
 
 % Initial guess
+if Misc.synergy_control
+    [W,H] = nnmf(DatStore.SoAct,Misc.synergy_control);
+    control_guess = W;    
+else
+    control_guess = DatStore.SoAct;
+end
+
 N = length(DatStore.time);
 guess.phase.time = DatStore.time;
 switch study{2}
     case 'HipAnkle'
-        guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+        guess.phase.control = [control_guess DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     case 'HipKneeAnkle'
-        guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+        guess.phase.control = [control_guess DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     case 'HipExtHipAbd'
-        guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+        guess.phase.control = [control_guess DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     otherwise
-        guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
+        guess.phase.control = [control_guess DatStore.SoRAct./150 0.01*ones(N,auxdata.NMuscles)];
 end
 
 guess.phase.state =  [DatStore.SoAct ones(N,auxdata.NMuscles)];
@@ -462,7 +468,8 @@ switch study{2}
 end
 
 if Misc.synergy_control
-    parameter_guess = [parameter_guess 0.5*synergyVectors];
+    synVectors_guess = reshape(H,1,numControls*auxdata.NMuscles)/5;
+    parameter_guess = [parameter_guess synVectors_guess];
 end
 
 guess.parameter = parameter_guess;
@@ -561,7 +568,9 @@ DatStore.tradeoff = zeros(auxdata.Ndof,1);
 DatStore.Fopt_exo = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipAnkle') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
@@ -680,15 +689,22 @@ end
 % Spline structures
 for dof = 1:auxdata.Ndof
     for m = 1:auxdata.NMuscles       
-        auxdata.JointMASpline(dof).Muscle(m) = spline(DatStore.time,auxdata.MA(dof).Joint(:,m));       
+        auxdata.JointMASpline(dof).Muscle(m) = spline(DatStore.time,auxdata.MA(dof).Joint(:,m));
+        auxdata.JointMAInterp(dof).Muscle(:,m) = interp1(auxdata.MA(dof).Joint(:,m),DatStore.time);
     end
     auxdata.JointIDSpline(dof) = spline(DatStore.time,DatStore.T_exp(:,dof));
+    auxdata.JointIDInterp(:,dof) = interp1(DatStore.T_exp(:,dof),DatStore.time);
+    
     auxdata.JointEXOSpline(dof) = spline(DatStore.time,DatStore.T_exo(:,dof));
+    auxdata.JointIDInterp(:,dof) = interp1(DatStore.T_exo(:,dof),DatStore.time);
+    
     auxdata.JointIKSpline(dof) = spline(DatStore.time,DatStore.q_exp(:,dof));
+    auxdata.JointIKInterp(:,dof) = interp1(DatStore.q_exp(:,dof),DatStore.time);
 end
 
 for m = 1:auxdata.NMuscles
     auxdata.LMTSpline(m) = spline(DatStore.time,DatStore.LMT(:,m));
+    auxdata.LMTInterp(:,m) = interp1(DatStore.LMT(:,m),DatStore.time);
 end
 
 % GPOPS setup
@@ -698,10 +714,11 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.derivatives.derivativelevel = 'second';
 setup.nlp.ipoptoptions.tolerance = 1e-6;
 setup.nlp.ipoptoptions.maxiterations = 2000;
-setup.derivatives.supplier = 'adigator';
+setup.derivatives.supplier = 'sparseCD';
+setup.derivatives.derivativelevel = 'first';
+setup.derivatives.dependencies = 'sparse';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-3;
@@ -715,7 +732,7 @@ setup.mesh.phase.colpoints = 5*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
 setup.functions.continuous = str2func(['continous_lMtilde' tag]);
 setup.functions.endpoint = str2func(['endpoint_lMtilde' tag]);
-    
+
 % ADiGator setup
 persistent splinestruct
 input.auxdata = auxdata;
@@ -755,7 +772,7 @@ elseif ispc
         splinestruct.(splinenames{Scount}) = zeros(0,secdim);
     end
     setup.auxdata.splinestruct = splinestructad;
-    adigatorGenFiles4gpops2(setup)
+    %adigatorGenFiles4gpops2(setup)
 else
     error('Platform unknown.')
 end
