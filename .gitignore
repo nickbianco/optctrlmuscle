@@ -13,3 +13,13 @@ MuscleAnalysis/
 # Generated when running OpenSim.
 err.log
 out.log
+
+# MATLAB autosave files
+*.asv
+
+# Image files
+*.emf
+*.eps
+*.jpg
+*.png
+

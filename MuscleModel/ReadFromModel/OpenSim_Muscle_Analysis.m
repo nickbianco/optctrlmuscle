@@ -13,16 +13,40 @@ osimModel=Model(model_sel);
 tool.setModel(osimModel);
 tool.setResultsDir(output_path);
 tool.setInitialTime(event(1));
-tool.setFinalTime(event(2));
+tool.setFinalTime(event(2) + 0.01);
 [~, name, ~]=fileparts(motion_file);
 tool.setName(name);
 
 % run the analysis
 tool.setModelFilename(model_sel);
 tool.setCoordinatesFileName(motion_file);
-out_path_xml=fullfile(output_path,['muscle_analysis_' name '.xml']);
-tool.print(out_path_xml);
-tool.run;
+
+% if ispc
+%     out_path_xml=fullfile(output_path,['muscle_analysis_' name '.xml']);
+%     tool.print(out_path_xml);
+%     tool.run;
+% else
+    
+    [results_dir,~] = fileparts(output_path);
+    curr_dir = fileparts(mfilename('fullpath'));
+    if ~exist(fullfile(curr_dir,results_dir), 'dir')
+        mkdir(results_dir)
+    end
+    if ~exist(fullfile(curr_dir,output_path), 'dir')
+        mkdir(output_path)
+    end
+    
+    out_path_xml=fullfile(['muscle_analysis_' name '.xml']);
+    tool.print(out_path_xml);
+    %tool_deserialized = AnalyzeTool(out_path_xml);
+    %tool_deserialized.run();
+    %tool.run;
+    %
+    % TODOmrs hard-coded OpenSim executable path location.
+    assert(~isempty(getenv('OPENSIM_HOME')));
+    %assert(exist([getenv('OPENSIM_HOME') '/bin/analyze'], 'file') == 2);
+    system(['"' getenv('OPENSIM_HOME') '/bin/analyze" -S ' out_path_xml]);
+% end
 
 % dos(['analyze1 -S ', out_path_xml]);
 
