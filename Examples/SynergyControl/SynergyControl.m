@@ -25,18 +25,17 @@ Misc.DofNames_Input={'ankle_angle_r','knee_angle_r','hip_flexion_r'};
 Misc.Loads_path='external_loads.xml';
 
 % % Muscle excitation as control case
-% Misc.costfun = 'Exc_Act';
-% Misc.study = 'SoftExosuitDesign/HipAnkle';
-% Misc.exo_force_level = 2;
-% 
-% %% Solve the problem
-% 
-% [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-% filename=['SynergyControl_MRS_solution_Inf_syns.mat'];
-% savepath=fullfile(DirCurrent,filename);
-% save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
-%     'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
+Misc.costfun = 'Exc_Act';
+Misc.study = 'SoftExosuitDesign/HipAnkle';
+Misc.exo_force_level = 2;
 
+%% Solve the problem
+
+[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+filename=['SynergyControl_MRS_solution_Inf_syns.mat'];
+savepath=fullfile(DirCurrent,filename);
+save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
+    'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
 
 % Synergy contraint case
 Misc.costfun = 'Exc_Act';

@@ -301,11 +301,18 @@ auxdata.finaltime = tf;
 if Misc.synergy_control
     numControls = Misc.synergy_control;
     umin = e_min*ones(1,numControls); 
-    umax = Inf*ones(1,numControls);
+    umax = e_max*ones(1,numControls);
+    
+    [W,H] = nnmf(DatStore.SoAct,Misc.synergy_control);
+    control_guess = W;
+    synVectors = reshape(H,1,numControls*auxdata.NMuscles);
+    auxdata.synVectors = synVectors;
 else
     numControls = auxdata.NMuscles;
     umin = e_min*ones(1,numControls); 
     umax = e_max*ones(1,numControls);
+    
+    control_guess = DatStore.SoAct;
 end
 auxdata.numControls = numControls;
 
@@ -389,10 +396,10 @@ switch study{2}
         parameter_upper = force_level_upper;
 end
 
-if Misc.synergy_control
-    parameter_lower = [parameter_lower e_min*ones(1, numControls*auxdata.NMuscles)];
-    parameter_upper = [parameter_upper Inf*ones(1, numControls*auxdata.NMuscles)];
-end
+% if Misc.synergy_control
+%     parameter_lower = [parameter_lower synVectors_guess];
+%     parameter_upper = [parameter_upper synVectors_guess];
+% end
 
 bounds.parameter.lower = parameter_lower;
 bounds.parameter.upper = parameter_upper;
@@ -402,10 +409,10 @@ ID_bounds = zeros(1, auxdata.Ndof);
 path_lower = ID_bounds;
 path_upper = ID_bounds;
 
-if Misc.synergy_control
-    path_lower = [path_lower ones(1, numControls)];
-    path_upper = [path_upper ones(1, numControls)];
-end
+% if Misc.synergy_control
+%     path_lower = [path_lower ones(1, numControls)];
+%     path_upper = [path_upper ones(1, numControls)];
+% end
 
 bounds.phase.path.lower = path_lower;
 bounds.phase.path.upper = path_upper;
@@ -418,13 +425,6 @@ bounds.eventgroup.lower = pera_lower;
 bounds.eventgroup.upper = pera_upper;
 
 % Initial guess
-if Misc.synergy_control
-    [W,H] = nnmf(DatStore.SoAct,Misc.synergy_control);
-    control_guess = W;    
-else
-    control_guess = DatStore.SoAct;
-end
-
 N = length(DatStore.time);
 guess.phase.time = DatStore.time;
 switch study{2}
@@ -457,10 +457,9 @@ switch study{2}
         parameter_guess = 4;
 end
 
-if Misc.synergy_control
-    synVectors_guess = reshape(H,1,numControls*auxdata.NMuscles)/5;
-    parameter_guess = [parameter_guess synVectors_guess];
-end
+% if Misc.synergy_control
+%     parameter_guess = [parameter_guess synVectors_guess];
+% end
 
 guess.parameter = parameter_guess;
 

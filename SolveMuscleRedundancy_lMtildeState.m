@@ -716,9 +716,9 @@ setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
 setup.nlp.ipoptoptions.tolerance = 1e-6;
 setup.nlp.ipoptoptions.maxiterations = 2000;
-setup.derivatives.supplier = 'sparseCD';
-setup.derivatives.derivativelevel = 'first';
-setup.derivatives.dependencies = 'sparse';
+setup.derivatives.supplier = 'adigator';
+setup.derivatives.derivativelevel = 'second';
+% setup.derivatives.dependencies = 'sparse';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-3;
@@ -772,7 +772,7 @@ elseif ispc
         splinestruct.(splinenames{Scount}) = zeros(0,secdim);
     end
     setup.auxdata.splinestruct = splinestructad;
-    %adigatorGenFiles4gpops2(setup)
+    adigatorGenFiles4gpops2(setup)
 else
     error('Platform unknown.')
 end
@@ -781,7 +781,7 @@ setup.functions.continuous = str2func(['Wrap4continous_lMtilde' tag]);
 setup.adigatorgrd.continuous = str2func(['continous_lMtilde' tag 'GrdWrap']);
 setup.adigatorgrd.endpoint   = str2func(['endpoint_lMtilde' tag 'ADiGatorGrd']);
 setup.adigatorhes.continuous = str2func(['continous_lMtilde' tag 'HesWrap']);
-setup.adigatorhes.endpoint   = str2func(['endpoint_lMtilde' tag 'ADiGatorHes']);
+setup.adigatorhes.endpoint   = str2func(['endpoint_lMtilde' tag 'ADgit iGatorHes']);
 
 
 %% ---------------------------------------------------------------------- %

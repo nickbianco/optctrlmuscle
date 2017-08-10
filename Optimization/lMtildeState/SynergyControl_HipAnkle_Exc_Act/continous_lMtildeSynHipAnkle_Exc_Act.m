@@ -27,18 +27,19 @@ alpha    = input.phase.parameter(:,1);
 tradeoff = input.auxdata.tradeoff;
 
 % Synergy control structure
-synActivations = u;
-synVecs = input.phase.parameter(:,2:end);
-synVectors = reshape(synVecs(1,:),numControls,NMuscles);
+e = u;
+% synActivations = u;
+%synVecs = input.phase.parameter(:,2:end);
+% synVectors = reshape(input.auxdata.synVectors,numControls,NMuscles);
+% 
+% e = synActivations*synVectors;
 
-e = synActivations*synVectors;
-
-synUnitMag = zeros(numColPoints,numControls);
-for syn = 1:numControls
-    idx = NMuscles*(syn-1) + 1;
-    synVec = synVecs(:,idx:(idx+NMuscles-1));
-    synUnitMag(:,syn) = sum(synVec,2);
-end
+% synUnitMag = zeros(numColPoints,numControls);
+% for syn = 1:numControls
+%     idx = NMuscles*(syn-1) + 1;
+%     synVec = synVecs(:,idx:(idx+NMuscles-1));
+%     synUnitMag(:,syn) = sum(synVec,2);
+% end
 
 % synVectors = input.phase.parameter(:,2:end);
 % synUnitMag = zeros(numColPoints,numControls);
@@ -78,7 +79,7 @@ for dof = 1:Ndof
 end
 
 % phaseout.path = [Tdiff Hilldiff synUnitMag];
-phaseout.path = [Tdiff synUnitMag];
+phaseout.path = [Tdiff];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics
