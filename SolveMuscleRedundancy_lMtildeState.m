@@ -128,6 +128,10 @@ end
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
     Misc.tendonStiffnessCoeff = 35;
 end
+% Modify individual tendon stiffnesses
+if ~isfield(Misc, 'tendonStiffnessModifiers') || isempty(Misc.tendonStiffnessModifiers)
+    Misc.tendonStiffnessModifiers = [];
+end
 
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
@@ -197,6 +201,17 @@ end
 % dynamic optimization
 % Extract the muscle-tendon properties
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+
+% Modify tendon stiffnesses
+for m = 1:DatStore.nMuscles
+    muscle_name = Misc.MuscleNames_Input{m};
+    if isfield(Misc.tendonStiffnessModifiers, muscle_name)
+        DatStore.params(6,m) = Misc.tendonStiffnessModifiers.(muscle_name);
+    else
+        DatStore.params(6,m) = 1;
+    end
+end
+
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
 
@@ -522,7 +537,9 @@ DatStore.tradeoff = zeros(auxdata.Ndof,1);
 DatStore.Fopt_exo = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipAnkle') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 

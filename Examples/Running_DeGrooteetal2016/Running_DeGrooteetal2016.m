@@ -11,9 +11,9 @@ filepath=which('Running_DeGrooteetal2016.m');
 addpath(genpath(MainDir));
 
 % Needed Input Arguments
-IK_path=fullfile(MainDir,'Examples','Running_DeGrooteetal2016','RunningData','IK_Joggen_1.mot');
-ID_path=fullfile(MainDir,'Examples','Running_DeGrooteetal2016','RunningData','ID_Joggen_1.sto');
-model_path=fullfile(MainDir,'Examples','Running_DeGrooteetal2016','RunningData','AdDB_Scaled_FB_FA.osim');
+IK_path=fullfile(MainDir,'Data','RunningData','IK_Joggen_1.mot');
+ID_path=fullfile(MainDir,'Data','RunningData','ID_Joggen_1.sto');
+model_path=fullfile(MainDir,'Data','RunningData','AdDB_Scaled_FB_FA.osim');
 time=[0.05 0.98];     % Right stance phase (+50ms beginning and end of time interval, more details see see manual and publication)
 OutPath=fullfile(MainDir,'Examples','Running_DeGrooteetal2016','Results');
 
