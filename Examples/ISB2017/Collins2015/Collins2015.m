@@ -25,9 +25,8 @@ Misc.DofNames_Input={'ankle_angle_r','knee_angle_r','hip_flexion_r'};
 Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 
 % Optional Input Arguments
-Misc.costfun = 'Exc_Act';
+Misc.costfun = 'MinAlex';
 Misc.study = 'ISB2017/Collins2015';
-Misc.ankle_clutched_spring_pushoff_time = 1.0;
 Misc.fixed_rest_length = true;
 
 %% Solve the problem
@@ -37,7 +36,7 @@ filename='Collins2015_MRS_solution_opt.mat';
 savepath=fullfile(DirCurrent,filename);
 save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
         'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
-    
+
 for i = 0.1:0.1:0.3
     Misc.ankle_clutched_spring_stiffness = i;
     [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
@@ -53,8 +52,12 @@ end
 function ExoTorques = getExoTorques(OptInfo,DatStore,Misc)
 
 time = OptInfo.result.solution.phase.time;
+first_peak = OptInfo.result.setup.auxdata.rest_length_first_peak;
+after_recoil = OptInfo.result.setup.auxdata.rest_length_after_recoil;
+beginSpringStretching = 1 ./ (1 + exp(100 * (first_peak  - time)));
+restLengthReached = 1 ./ (1 + exp(100 * (time - after_recoil)));
 
-isStancePhase = 1 ./ (1 + exp(100 * (time - OptInfo.result.setup.auxdata.pushoff_time)));
+isSpringActive = beginSpringStretching .* restLengthReached;
 
 % TODO interpolate to use Time.
 maxSpringStiff = 400; % N-m/rad.
@@ -64,7 +67,7 @@ for dof = 1:length(Misc.DofNames_Input)
     if strfind(Misc.DofNames_Input{dof}, 'ankle_angle') == 1
         jointAngle = pi / 180. * ppval(OptInfo.result.setup.auxdata.JointIKSpline(dof),time);
         stretch = -(jointAngle - springRestAngle);
-        ExoTorques.ankle_angle = maxSpringStiff * normSpringStiff .* stretch .* isStancePhase;
+        ExoTorques.ankle_angle = maxSpringStiff * normSpringStiff .* stretch .* isSpringActive;
     end   
 end
 

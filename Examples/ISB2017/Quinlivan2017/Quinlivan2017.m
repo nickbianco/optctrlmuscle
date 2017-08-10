@@ -28,9 +28,8 @@ Misc.DofNames_Input={'ankle_angle_r','knee_angle_r','hip_flexion_r','hip_adducti
 Misc.Loads_path = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait2354_Simbody','subject01_walk1_grf.xml');
 
 % Optional Input Arguments
-Misc.costfun = 'Exc_Act';
+Misc.costfun = 'MinAlex';
 Misc.study = 'ISB2017/Quinlivan2017';
-Misc.model_mass = 75.1646; % kg (Gait2354 mass)
 
 %% Solve the problem
 
@@ -50,8 +49,7 @@ filename=strcat('Quinlivan2017_MRS_solution_force_level_',int2str(Misc.exo_force
 savepath=fullfile(DirCurrent,filename);
 save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
         'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
-       
-% keyboard
+
 
 for i = 1:4
     % Device force level
