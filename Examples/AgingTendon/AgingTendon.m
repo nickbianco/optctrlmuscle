@@ -12,13 +12,14 @@ filepath=which('AgingTendon.m');
 addpath(genpath(MainDir));
 
 % Needed Input Arguments
-IK_path=fullfile(MainDir,'Data','WalkingData','inverse_kinematics.mot');
-ID_path=fullfile(MainDir,'Data','WalkingData','inverse_dynamics.sto');
-model_path=fullfile(MainDir,'Data','WalkingData','subject01.osim');
+IK_path=fullfile(MainDir,'Data','SamEdith','subject02','mrsdeviceopt_subject02_walk2_ik_solution.mot');
+ID_path=fullfile(MainDir,'Data','SamEdith','subject02','mrsdeviceopt_subject02_walk2_id_solution.sto');
+model_path=fullfile(MainDir,'Data','SamEdith','subject02','subject02_18musc.osim');
 time=[0.516 1.95];     % Right stance phase (+50ms beginning and end of time interval, more details see manual and publication)
 OutPath=fullfile(MainDir,'Examples','AgingTendon','Results');
 Misc.MuscleNames_Input={};      % Selects all muscles for the Input DOFS when this is left empty.
 Misc.DofNames_Input={'ankle_angle_r','knee_angle_r','hip_flexion_r'};
+Misc.Loads_path=fullfile(MainDir,'Data','SamEdith','subject01','external_loads.xml');
 
 % Optional Input Arguments
 Misc.Atendon = [];        % Tendon Stiffness for the selected muscles
@@ -33,7 +34,10 @@ Misc.f_order_IK = 5;             % order frequency filtering IK
 
 %% Define problem
 Misc.costfun = 'Exc_Act';
-Misc.study = 'SoftExosuitDesign/HipAnkle';
+Misc.study = 'AgingTendon/CollinsNonLin';
+study = strsplit(Misc.study,'/');
+Misc.ankle_clutched_spring_pushoff_time = 1.0;
+Misc.fixed_rest_length = true;
 
 %% Solve the problem
 
@@ -46,12 +50,11 @@ for i = 1:length(tendonMods)
         Misc.tendonStiffnessModifiers.(muscleMods{m}) = tendonMods(i);
     end
     
-    Misc.exo_force_level = 2;
     [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = ...
         SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-    filename = ['AgingTendon_HipAnkle_stiffnessMod_' num2str(tendonMods(i)) '_MRS_solution.mat'];
+    filename = ['AgingTendon_' study{2} '_stiffnessMod_' num2str(tendonMods(i)) '_MRS_solution.mat'];
     savepath=fullfile(DirCurrent,filename);
     save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
-        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
+        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore');
 end
 

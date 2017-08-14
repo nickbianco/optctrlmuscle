@@ -63,6 +63,8 @@ switch study{1}
         tag = ['Exo' study{2}];
     case 'ISB2017'
         tag = ['ISB' study{2}];
+    otherwise
+        tag = '';
 end
 tag = [tag '_' Misc.costfun];
 
@@ -229,11 +231,11 @@ auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
 
 % Collins et al. 2015 study, optimizing for spring stiffness
-if strcmp(study{2}, 'Collins2015')
+if strcmp(study{2}, 'Collins2015') || strcmp(study{2}, 'CollinsNonLin')
     
     % Find clutched spring DOFs
     % TODO: support separately clutching left and right leg.
-    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);  
+    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);
       
     % Find fixed rest length based on first ankle angle peak after
     % heel strike
@@ -384,6 +386,25 @@ switch study{2}
         end
         bounds.parameter.lower = [stiffness_lower, rest_length_lower];
         bounds.parameter.upper = [stiffness_upper, rest_length_upper];
+    case 'CollinsNonLin'
+        stiffness_lower = 0;
+        stiffness_upper = 1;
+        if Misc.ankle_clutched_spring_stiffness ~= -1
+            assert(Misc.ankle_clutched_spring_stiffness >= 0 && ...
+                   Misc.ankle_clutched_spring_stiffness <= 1);
+            stiffness_lower = Misc.ankle_clutched_spring_stiffness;
+            stiffness_upper = Misc.ankle_clutched_spring_stiffness;
+        end
+        rest_length_lower = -0.5;
+        rest_length_upper = 0.5;
+        if Misc.fixed_rest_length
+            rest_length_lower = auxdata.rest_length;
+            rest_length_upper = auxdata.rest_length;
+        end
+        nonlin_coeff_lower = -1;
+        nonlin_coeff_upper = 1;
+        bounds.parameter.lower = [stiffness_lower, rest_length_lower, nonlin_coeff_lower];
+        bounds.parameter.upper = [stiffness_upper, rest_length_upper, nonlin_coeff_upper];
     case 'Quinlivan2017'
         force_level_lower = 0;
         force_level_upper = 10;
@@ -439,6 +460,8 @@ switch study{2}
         guess.parameter = 0;
     case 'Collins2015'
         guess.parameter = [0.5, 0];
+    case 'CollinsNonLin'
+        guess.parameter = [0.5, 0, 0];
     case 'Quinlivan2017'
         guess.parameter = 4;
 end
@@ -775,6 +798,11 @@ if strcmp(study{1},'ISB2017')
             OptInfo, DatStore);
     elseif strcmp(study{2},'Collins2015') && strcmp(Misc.costfun, 'Exc_Act')
         DatStore.ExoTorques = calcExoTorques_lMtildeISBCollins2015_Exc_Act(...
+            OptInfo, DatStore);
+    end
+elseif strcmp(study{1},'AgingTendon')
+    if strcmp(study{2},'CollinsNonLin') && strcmp(Misc.costfun, 'Exc_Act')
+        DatStore.ExoTorques = calcExoTorques_lMtildeCollinsNonLin_Exc_Act(...
             OptInfo, DatStore);
     end
 end
