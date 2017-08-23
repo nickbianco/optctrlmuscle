@@ -11,9 +11,9 @@ filepath=which('Walking_DeGrooteetal2016.m');
 addpath(genpath(MainDir));
 
 % Needed Input Arguments
-IK_path=fullfile(MainDir,'Examples','Walking_DeGrooteetal2016','WalkingData','inverse_kinematics.mot');
-ID_path=fullfile(MainDir,'Examples','Walking_DeGrooteetal2016','WalkingData','inverse_dynamics.sto');
-model_path=fullfile(MainDir,'Examples','Walking_DeGrooteetal2016','WalkingData','subject01.osim');
+IK_path=fullfile(MainDir,'Data','WalkingData','inverse_kinematics.mot');
+ID_path=fullfile(MainDir,'Data','WalkingData','inverse_dynamics.sto');
+model_path=fullfile(MainDir,'Data','WalkingData','subject01.osim');
 time=[0.516 1.95];     % Right stance phase (+50ms beginning and end of time interval, more details see manual and publication)
 OutPath=fullfile(MainDir,'Examples','Walking_DeGrooteetal2016','Results');
 
