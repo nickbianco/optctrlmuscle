@@ -12,7 +12,7 @@ alphao = ones(size(a,1),1)*params(4,:);
 % Hill-type muscle model: geometric relationships
 lM = lMtilde.*lMo;
 w = lMo.*sin(alphao);
-lT = lMT - sqrt((lM.^2 - w.^2));
+lT = lMT - real(sqrt((lM.^2 - w.^2)));
 lTtilde = lT./lTs;
 
 % Tendon force-length characteristic
@@ -74,5 +74,4 @@ err =  FM.*cos_alpha-fse;
 
 F = max(0,Fce);
 Fiso = max(0,FMltilde);
-
 end

@@ -188,6 +188,13 @@ Misc.MuscleAnalysisPath=MuscleAnalysisPath;
 if ~isfield(Misc,'MuscleNames_Input') || isempty(Misc.MuscleNames_Input)    
     Misc=getMuscles4DOFS(Misc);
 end
+
+% remove HOBL muscle
+if any(contains(Misc.MuscleNames_Input,'HOBL'))
+    index = find(contains(Misc.MuscleNames_Input,'HOBL'));
+    Misc.MuscleNames_Input(index)=[];
+    Misc.Atendon(index)=[];
+end
 [DatStore] = getMuscleInfo(IK_path,ID_path,Misc);
 
 % ----------------------------------------------------------------------- %
@@ -197,6 +204,9 @@ end
 % dynamic optimization
 % Extract the muscle-tendon properties
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+%DatStore.params(4,:) = zeros(1,DatStore.nMuscles);
+%DatStore.PennationAngle = zeros(1,DatStore.nMuscles);
+
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
 
@@ -209,7 +219,6 @@ DatStore = SolveStaticOptimization_IPOPT(DatStore);
 % Input arguments
 auxdata.NMuscles = DatStore.nMuscles;   % number of muscles
 auxdata.Ndof = DatStore.nDOF;           % humber of dofs
-% DatStore.time = DatStore.time;          % time window
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
 
@@ -380,6 +389,13 @@ switch study{2}
         end
         bounds.parameter.lower = force_level_lower;
         bounds.parameter.upper = force_level_upper;
+    case 'HOBL'
+        stiffness_lower = 0;
+        stiffness_upper = 1;
+        rest_length_lower = 0.1;
+        rest_length_upper = 1.0;
+        bounds.parameter.lower = [stiffness_lower, rest_length_lower];
+        bounds.parameter.upper = [stiffness_upper, rest_length_upper];
 end
 
 % Path constraints
@@ -426,10 +442,14 @@ switch study{2}
         guess.parameter = [0.5, 0];
     case 'Quinlivan2017'
         guess.parameter = 4;
+    case 'HOBL'
+        guess.parameter = [0.5,0.5];
 end
 
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
+DatStore.MA_exo = zeros(length(DatStore.time),auxdata.Ndof);
+DatStore.Length_exo = zeros(length(DatStore.time));
 DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
 model = org.opensim.modeling.Model(model_path);
@@ -510,6 +530,35 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
             end
             auxdata.p_linreg = DatStore.p_linreg;
     end   
+end
+
+% HOBL device optimization
+if strcmp(study{2},'HOBL')
+    % Import HOBL moment arms
+    for i=1:length(DatStore.DOFNames)
+        ma_Data_temp=importdata(fullfile(Misc.MuscleAnalysisPath,[Misc.trialName '_MuscleAnalysis_MomentArm_' DatStore.DOFNames{i} '.sto']));
+        if i==1
+            headers=ma_Data_temp.colheaders;
+            ind_sel=find(strcmp('HOBL',headers));
+            % read indexes in time frame for muscle analysis
+            t_Mus=ma_Data_temp.data(:,1);           
+            t_Mus=round(t_Mus*10000)/10000;
+            ind0=find(t_Mus>=Misc.time(1),1,'first'); 
+            ind_end=find(t_Mus<=Misc.time(2),1,'last');
+            Mus_inds=ind0:ind_end;
+        end
+        MA_temp(:,i)=ma_Data_temp.data(Mus_inds,ind_sel);
+    end
+    % Filter the moment arms information and store them in DatStore.dM
+    fs=1/mean(diff(t_Mus));
+    f_cutoff = Misc.f_cutoff_dM;
+    orde = Misc.f_order_dM;
+    [B,A] = butter(orde, f_cutoff/(fs/2));
+    DatStore.MA_exo = filtfilt(B,A,MA_temp);
+   
+    % Import HOBL length data
+    length_Data=importdata(fullfile(Misc.MuscleAnalysisPath,[Misc.trialName '_MuscleAnalysis_Length.sto']));
+    DatStore.Length_exo = length_Data.data(Mus_inds,ind_sel);
 end
 
 % "Tradeoff" struct
@@ -645,6 +694,8 @@ for dof = 1:auxdata.Ndof
     end
     auxdata.JointIDSpline(dof) = spline(DatStore.time,DatStore.T_exp(:,dof));
     auxdata.JointEXOSpline(dof) = spline(DatStore.time,DatStore.T_exo(:,dof));
+    auxdata.JointMAEXOSpline(dof) = spline(DatStore.time,DatStore.MA_exo(:,dof));
+    auxdata.JointLenEXOSpline = spline(DatStore.time,DatStore.Length_exo);
     auxdata.JointIKSpline(dof) = spline(DatStore.time,DatStore.q_exp(:,dof));
 end
 
@@ -683,7 +734,7 @@ input.auxdata = auxdata;
 
 % Path locking for Linux platforms
 if isunix
-    pathLock='/tmp/adigator3.lock'
+    pathLock='/tmp/adigator3.lock';
     % Try to create and lock this file.
     if ismac
         lockfilecommand = 'dotlockfile'; % Get from homebrew.
@@ -758,6 +809,9 @@ if strcmp(study{1},'ISB2017')
             OptInfo, DatStore);
     elseif strcmp(study{2},'Collins2015') && strcmp(Misc.costfun, 'Exc_Act')
         DatStore.ExoTorques = calcExoTorques_lMtildeISBCollins2015_Exc_Act(...
+            OptInfo, DatStore);
+    elseif strcmp(study{2},'HOBL') && strcmp(Misc.costfun, 'Exc_Act')
+        DatStore.ExoTorques = calcExoTorques_lMtildeISBHOBL_Exc_Act(...
             OptInfo, DatStore);
     end
 end
