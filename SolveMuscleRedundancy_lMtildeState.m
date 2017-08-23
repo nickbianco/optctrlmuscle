@@ -63,6 +63,8 @@ switch study{1}
         tag = ['Exo' study{2}];
     case 'ISB2017'
         tag = ['ISB' study{2}];
+    otherwise
+        tag = '';
 end
 tag = [tag '_' Misc.costfun];
 
@@ -127,6 +129,10 @@ end
 % Variable tendon stiffness
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
     Misc.tendonStiffnessCoeff = 35;
+end
+% Modify individual tendon stiffnesses
+if ~isfield(Misc, 'tendonStiffnessModifiers') || isempty(Misc.tendonStiffnessModifiers)
+    Misc.tendonStiffnessModifiers = [];
 end
 
 % ----------------------------------------------------------------------- %
@@ -204,8 +210,16 @@ end
 % dynamic optimization
 % Extract the muscle-tendon properties
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
-%DatStore.params(4,:) = zeros(1,DatStore.nMuscles);
-%DatStore.PennationAngle = zeros(1,DatStore.nMuscles);
+
+% Modify tendon stiffnesses
+for m = 1:DatStore.nMuscles
+    muscle_name = Misc.MuscleNames_Input{m};
+    if isfield(Misc.tendonStiffnessModifiers, muscle_name)
+        DatStore.params(6,m) = Misc.tendonStiffnessModifiers.(muscle_name);
+    else
+        DatStore.params(6,m) = 1;
+    end
+end
 
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
@@ -227,7 +241,7 @@ if strcmp(study{2}, 'Collins2015')
     
     % Find clutched spring DOFs
     % TODO: support separately clutching left and right leg.
-    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);  
+    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);
       
     % Find fixed rest length based on first ankle angle peak after
     % heel strike
@@ -571,7 +585,9 @@ DatStore.tradeoff = zeros(auxdata.Ndof,1);
 DatStore.Fopt_exo = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipAnkle') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
