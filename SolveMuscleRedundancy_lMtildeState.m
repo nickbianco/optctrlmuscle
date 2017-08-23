@@ -800,11 +800,6 @@ if strcmp(study{1},'ISB2017')
         DatStore.ExoTorques = calcExoTorques_lMtildeISBCollins2015_Exc_Act(...
             OptInfo, DatStore);
     end
-elseif strcmp(study{1},'AgingTendon')
-    if strcmp(study{2},'CollinsNonLin') && strcmp(Misc.costfun, 'Exc_Act')
-        DatStore.ExoTorques = calcExoTorques_lMtildeCollinsNonLin_Exc_Act(...
-            OptInfo, DatStore);
-    end
 end
 
 
