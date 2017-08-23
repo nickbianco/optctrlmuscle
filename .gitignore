@@ -16,6 +16,7 @@ out.log
 
 # MATLAB autosave files
 *.asv
+*.mat
 
 # Image files
 *.emf
