@@ -463,7 +463,7 @@ end
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 DatStore.MA_exo = zeros(length(DatStore.time),auxdata.Ndof);
-DatStore.Length_exo = zeros(length(DatStore.time));
+DatStore.Length_exo = zeros(length(DatStore.time),1);
 DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
 model = org.opensim.modeling.Model(model_path);

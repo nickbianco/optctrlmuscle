@@ -26,6 +26,8 @@ Misc.DofNames_Input={'ankle_angle_l','knee_angle_l','hip_flexion_l'};
 % Optional Input Arguments
 Misc.costfun = 'Exc_Act';
 Misc.study = 'ISB2017/HOBL';
+Misc.tendonStiffnessModifiers.vas_int_r = 0.95;
+Misc.tendonStiffnessModifiers.vas_int_l = 0.95;
 
 %% Solve the problem
 [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore] = SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
