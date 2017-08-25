@@ -7,6 +7,7 @@ FMo = ones(size(lMtilde,1),1)*params(1,:);
 lMo = ones(size(lMtilde,1),1)*params(2,:);
 lTs = ones(size(lMtilde,1),1)*params(3,:);
 alphao = ones(size(lMtilde,1),1)*params(4,:);
+tendonStiffnessModifier = ones(size(lMtilde,1),1)*params(6,:);
 
 % Hill-type muscle model: geometric relationships
 lM = lMtilde.*lMo;
@@ -15,7 +16,8 @@ lT = lMT - sqrt((lM.^2 - w.^2));
 lTtilde = lT./lTs;
 
 % Tendon force-length characteristic
-Ftilde = (exp(Fpparam(3)*(lTtilde - 0.995)))/5-0.25;
+tendonStiffness = Fpparam(3)*tendonStiffnessModifier;
+Ftilde = (exp(tendonStiffness.*(lTtilde - 0.995)))/5-0.25;
 F = FMo.*Ftilde;
 
 end
