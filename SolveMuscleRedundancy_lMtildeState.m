@@ -66,6 +66,10 @@ switch study{1}
     otherwise
         tag = '';
 end
+% Cost Function
+if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
+   Misc.costfun='Exc_Act';
+end
 tag = [tag '_' Misc.costfun];
 
 % ----------------------------------------------------------------------- %
@@ -105,10 +109,6 @@ end
 % Mesh Frequency
 if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
    Misc.Mesh_Frequency=100;
-end
-% Cost Function
-if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
-   Misc.costfun='Exc_Act';
 end
 % Which study?
 if ~isfield(Misc,'study') || isempty(Misc.study)

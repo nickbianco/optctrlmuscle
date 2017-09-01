@@ -3,7 +3,9 @@ clear all; close all; clc
 %% Choose formulation
 % formulation = 'lMtildeState';
 formulation = 'FtildeState';
-
+%% Choose activation dynamics
+% actdyn = 'DeGroote2016';
+actdyn = 'DeGroote2009';
 %% Example
 % add main folder and subfolder to matlab path (installation)
 filepath=which('Walking_DeGrooteetal2016.m');
@@ -31,9 +33,20 @@ Misc.f_order_dM = 5;             % order frequency filtering MA
 Misc.f_cutoff_IK= 8;         % cutoff frequency filtering IK
 Misc.f_order_IK = 5;             % order frequency filtering IK
 %% Solve the problem
-switch formulation
-    case 'lMtildeState'
-        [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-    case 'FtildeState'   
-        [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+switch actdyn
+    case 'DeGroote2016' % Activation dynamics from De Groote et al. (2016)      
+        switch formulation
+            case 'lMtildeState'
+                [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+            case 'FtildeState'   
+                [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+        end
+        
+    case 'DeGroote2009' % Activation dynamics from De Groote et al. (2009) 
+        switch formulation
+            case 'lMtildeState'
+                [Time_actdyn,MExcitation_actdyn,MActivation_actdyn,RActivation_actdyn,TForcetilde_actdyn,TForce_actdyn,lMtilde_actdyn,lM_actdyn,MuscleNames_actdyn,OptInfo_actdyn,DatStore_actdyn]=SolveMuscleRedundancy_lMtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc);
+            case 'FtildeState'   
+                [Time_actdyn,MExcitation_actdyn,MActivation_actdyn,RActivation_actdyn,TForcetilde_actdyn,TForce_actdyn,lMtilde_actdyn,lM_actdyn,MuscleNames_actdyn,OptInfo_actdyn,DatStore_actdyn]=SolveMuscleRedundancy_FtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc);
+        end
 end
