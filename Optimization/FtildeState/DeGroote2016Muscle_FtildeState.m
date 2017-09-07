@@ -9,9 +9,11 @@ lMo = ones(size(a,1),1)*params(2,:);
 lTs = ones(size(a,1),1)*params(3,:);
 alphao = ones(size(a,1),1)*params(4,:);
 vMmax = ones(size(a,1),1)*params(5,:);
+tendonStiffnessModifier = ones(size(a,1),1)*params(6,:);
 
 % Inverse tendon force-length characteristic
-lTtilde = log(5*(fse + 0.25))/35 + 0.995;
+tendonStiffness = Fpparam(3)*tendonStiffnessModifier;
+lTtilde = log(5*(fse + 0.25))/tendonStiffness + 0.995;
 
 % Hill-type muscle model: geometric relationships
 lM = sqrt((lMo.*sin(alphao)).^2+(lMT-lTs.*lTtilde).^2);

@@ -67,10 +67,10 @@ switch study{1}
         tag = '';
 end
 % Cost Function
-% if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
-%    Misc.costfun='Exc_Act';
-% end
-% tag = [tag '_' Misc.costfun];
+if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
+   Misc.costfun='Exc_Act';
+end
+tag = [tag '_' Misc.costfun];
 
 % ----------------------------------------------------------------------- %
 % Check for optional input arguments, see manual for details------------- %
@@ -134,10 +134,18 @@ end
 if ~isfield(Misc, 'tendonStiffnessModifiers') || isempty(Misc.tendonStiffnessModifiers)
     Misc.tendonStiffnessModifiers = [];
 end
+% ExoTopology: DOF's assisted by passive device
+if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
+   Misc.passiveDOFs = []; 
+end
+% ExoTopology: DOF's assisted by active device
+if ~isfield(Misc, 'activeDOFs') || isempty(Misc.activeDOFs)
+   Misc.activeDOFs = []; 
+end
 
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
-if strcmp(study{1},'SoftExosuitDesign')
+if strcmp(study{1},'SoftExosuitDesign') && ~strcmp(study{2},'Topology')
     errmsg = [study{1} ': must specify force level'];
     assert(Misc.exo_force_level ~= -1,errmsg)
 end
@@ -150,6 +158,14 @@ end
 if ~strcmp(study{2},'Collins2015')
     errmsg = [study{2} ': spring stiffness level unused'];
     assert(Misc.ankle_clutched_spring_stiffness == -1, errmsg)
+end
+
+if ~strcmp(study{2},'Topology')
+    errmsg = [study{2} ': active device DOFs unused'];
+    assert(Misc.activeDOFs == [], errmsg)
+    
+    errmsg = [study{2} ': passive device DOFs unused'];
+    assert(Misc.passiveDOFs == [], errmsg)
 end
 
 % ------------------------------------------------------------------------%
@@ -268,6 +284,58 @@ if strcmp(study{2}, 'Collins2015')
     end
 end
 
+% ExoTopology study: handling possible active + passive device cases
+% Create indicies for parameter array
+if strcmp(study{2}, 'Topology')
+    numExoParams = 1;
+    % Active device indicies
+    if ~isempty(Misc.activeDOFs)
+        for i = 1:length(Misc.activeDOFs)
+            auxdata.active.hip = 0;
+            auxdata.active.knee = 0;
+            auxdata.active.ankle = 0;
+            switch Misc.activeDOFs{i}
+                case 'hip'
+                    auxdata.active.hip = numExoParams;
+                    numExoParams = numExoParams + 1;
+                case 'knee'
+                    auxdata.active.knee = numExoParams;
+                    numExoParams = numExoParams + 1;
+                case 'ankle'
+                    auxdata.active.ankle = numExoParams;
+                    numExoParams = numExoParams + 1;
+            end
+        end
+        
+    end
+    % Passive device indicies
+    if ~isempty(Misc.passiveDOFs)
+        for i = 1:length(Misc.passiveDOFs)
+            auxdata.passive.hip = 0;
+            auxdata.passive.knee = 0;
+            auxdata.passive.ankle = 0;
+            switch Misc.passiveDOFs{i}
+                case 'hip'
+                    auxdata.passive.hip = numExoParams;
+                    numExoParams = numExoParams + 1;
+                case 'knee'
+                    auxdata.passive.knee = numExoParams;
+                    numExoParams = numExoParams + 1;
+                case 'ankle'
+                    auxdata.passive.ankle = numExoParams;
+                    numExoParams = numExoParams + 1;
+            end
+        end
+        % Extra index for exotendon slack length
+        auxdata.passive.slack_length = numExoParams;
+    end
+    auxdata.numExoParams = numExoParams;
+    
+    auxdata.hip_DOF = strmatch('hip_flexion',DatStore.DOFNames);
+    auxdata.knee_DOF = strmatch('knee_angle',DatStore.DOFNames);
+    auxdata.ankle_DOF = strmatch('ankle_angle',DatStore.DOFNames);
+end
+
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
 for i = 1:auxdata.Ndof
     auxdata.MA(i).Joint(:,:) = DatStore.dM(:,i,:);  % moment arms
@@ -317,19 +385,20 @@ dFMin = dF_min*ones(1,auxdata.NMuscles);
 dFMax = dF_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); 
 aTmax = 1*ones(1,auxdata.Ndof);
+aDmin = 0; 
+aDmax = 1;
 switch study{2}
-    case 'HipAnkle'
-        aDmin = 0; aDmax = 1;
+    case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_bounds_lower = [vAmin aTmin dFMin aDmin];
         control_bounds_upper = [vAmax aTmax dFMax aDmax];
-    case 'HipKneeAnkle'
-        aDmin = 0; aDmax = 1;
-        control_bounds_lower = [vAmin aTmin dFMin aDmin];
-        control_bounds_upper = [vAmax aTmax dFMax aDmax];
-    case 'HipExtHipAbd'
-        aDmin = 0; aDmax = 1;
-        control_bounds_lower = [vAmin aTmin dFMin aDmin];
-        control_bounds_upper = [vAmax aTmax dFMax aDmax];
+    case 'Topology'
+        if isfield(auxdata,'active')
+            control_bounds_lower = [vAmin aTmin dFMin aDmin];
+            control_bounds_upper = [vAmax aTmax dFMax aDmax];
+        else
+            control_bounds_lower = [vAmin aTmin dFMin];
+            control_bounds_upper = [vAmax aTmax dFMax];
+        end
     otherwise
         control_bounds_lower = [vAmin aTmin dFMin];
         control_bounds_upper = [vAmax aTmax dFMax];
@@ -399,6 +468,14 @@ switch study{2}
         end
         bounds.parameter.lower = force_level_lower;
         bounds.parameter.upper = force_level_upper;
+    case 'Topology'
+        if isfield(auxdata,'passive')
+            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) -0.3];
+            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 0.3];
+        else
+            bounds.parameter.lower = -0.1*ones(1,auxdata.numExoParams);
+            bounds.parameter.upper = 0.1*ones(1,auxdata.numExoParams);
+        end
 end
 
 % Path constraints
@@ -426,6 +503,12 @@ guess.phase.time = DatStore.time;
 switch study{2}
     case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+    case 'Topology'
+        if isfield(auxdata,'active')
+            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+        else
+            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
+        end
     otherwise
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
 end
@@ -446,6 +529,8 @@ switch study{2}
         guess.parameter = [0.5, 0];
     case 'Quinlivan2017'
         guess.parameter = 4;
+    case 'Topology'
+        guess.parameter = zeros(1,auxdata.numExoParams);
 end
 
 % Empty exosuit force and torque data structures
@@ -455,6 +540,7 @@ DatStore.p_linreg = zeros(2,auxdata.Ndof);
 model = org.opensim.modeling.Model(model_path);
 state = model.initSystem();
 model_mass = model.getTotalMass(state);
+auxdata.model_mass = model_mass;
 
 % Reproduce Quinlivan et al. 2017 study
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
