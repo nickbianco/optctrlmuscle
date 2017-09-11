@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopologyGrdWrap(input)
+function phaseout = continous_Ftilde_vAExoTopology_ActGrdWrap(input)
 
 persistent splinestruct
 
@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = continous_Ftilde_vAExoTopologyADiGatorGrd(input);
+phaseout = continous_Ftilde_vAExoTopology_ActADiGatorGrd(input);

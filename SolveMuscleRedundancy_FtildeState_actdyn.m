@@ -334,6 +334,22 @@ if strcmp(study{2}, 'Topology')
     auxdata.hip_DOF = strmatch('hip_flexion',DatStore.DOFNames);
     auxdata.knee_DOF = strmatch('knee_angle',DatStore.DOFNames);
     auxdata.ankle_DOF = strmatch('ankle_angle',DatStore.DOFNames);
+    
+    % Check knee coordinate convention 
+    model = org.opensim.modeling.Model(model_path);
+    coord_set = model.getCoordinateSet();
+    knee_coord = coord_set.get('knee_angle_r');
+    knee_range_min = (180/pi) * knee_coord.getRangeMin;
+    knee_range_max = (180/pi) * knee_coord.getRangeMax;
+    
+    % Knee should increase joint angle during anterior swing
+    % TODO: make generic to all models?
+    if (knee_range_min < -100) && (knee_range_max >= 0)
+        % TODO, is this case needed?
+    elseif (-10 <= knee_range_min && knee_range_min <= 0) && (knee_range_max > 100)
+        DatStore.q_exp(:,auxdata) = -DatStore.q_exp(:,auxdata);
+    end
+    
 end
 
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)

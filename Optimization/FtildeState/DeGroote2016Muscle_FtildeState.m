@@ -13,10 +13,10 @@ tendonStiffnessModifier = ones(size(a,1),1)*params(6,:);
 
 % Inverse tendon force-length characteristic
 tendonStiffness = Fpparam(3)*tendonStiffnessModifier;
-lTtilde = log(5*(fse + 0.25))/tendonStiffness + 0.995;
+lTtilde = log(5*(fse + 0.25))./tendonStiffness + 0.995;
 
 % Hill-type muscle model: geometric relationships
-lM = sqrt((lMo.*sin(alphao)).^2+(lMT-lTs.*lTtilde).^2);
+lM = real(sqrt((lMo.*sin(alphao)).^2+(lMT-lTs.*lTtilde).^2));
 lMtilde = lM./lMo;
 
 % Active muscle force-length characteristic
