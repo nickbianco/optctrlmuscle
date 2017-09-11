@@ -10,7 +10,11 @@ filepath=which('Example_Gait10dof18m.m'); [DirExample,~,~]=fileparts(filepath); 
 addpath(genpath(MainDir));
 
 % Needed Input Arguments
-Datapath='C:\OpenSim 3.3\Models\Gait10dof18musc\OutputReference';
+if isempty(getenv('OPENSIM_HOME'))
+    error('You must define the OPENSIM_HOME environment variable.');
+end
+Datapath = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait10dof18musc', ...
+    'OutputReference');
 IK_path=fullfile(Datapath,'IK','subject01_walk_IK.mot');
 ID_path=[]; % compute ID from the external loads
 model_path=fullfile(Datapath,'subject01.osim');
