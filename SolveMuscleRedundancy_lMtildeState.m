@@ -197,6 +197,7 @@ end
 % dynamic optimization
 % Extract the muscle-tendon properties
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
 
@@ -522,7 +523,9 @@ DatStore.tradeoff = zeros(auxdata.Ndof,1);
 DatStore.Fopt_exo = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipAnkle') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
@@ -762,6 +765,10 @@ if strcmp(study{1},'ISB2017')
     end
 end
 
-
+if strcmp(study{1}, 'SoftExosuitDesign')
+    if strcmp(study{2}, 'HipAnkle') && strcmp(Misc.costfun, 'Exc_Act')
+       DatStore.ExoTorques = calcExoTorques_lMtildeExoHipAnkle_Exc_Act(...
+           OptInfo, DatStore);
+    end
 end
 
