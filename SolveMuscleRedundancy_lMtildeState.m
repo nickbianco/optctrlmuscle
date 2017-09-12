@@ -570,7 +570,9 @@ end
 DatStore.Fopt_exo_knee = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipKneeAnkle') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
@@ -601,7 +603,9 @@ end
 % abduction assistance
 if strcmp(study{2},'HipExtHipAbd') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
@@ -630,7 +634,9 @@ end
 if strcmp(study{2},'HipAnkleMass') 
     
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkleMass/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));    
     exoTime = ExoCurves.time;
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleMomentPeaks = ExoCurves.am_peak * model_mass;

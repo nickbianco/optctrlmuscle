@@ -13,18 +13,14 @@ numColPoints    = size(input.phase.state,1);
 vA   = 100*input.phase.control(:,1:NMuscles);
 aT  = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde  = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-% if isfield(input.auxdata,'active')
- aD = input.phase.control(:,end); 
-% end
+aD = input.phase.control(:,end);
 
 % Get states
 a       = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
 
-% Get parameters
-% if isfield(input.auxdata,'passive')
-exoMomentArms = zeros(numColPoints,6);
-
+% Get moment arms
+exoMomentArms = zeros(numColPoints,3);
 if input.auxdata.active.hip
     exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
 end
@@ -34,37 +30,6 @@ end
 if input.auxdata.active.ankle
     exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
 end
-if input.auxdata.passive.hip
-    exoMomentArms(:,4) = input.phase.parameter(:,input.auxdata.passive.hip);
-end
-if input.auxdata.passive.knee
-    exoMomentArms(:,5) = input.phase.parameter(:,input.auxdata.passive.knee);
-end
-if input.auxdata.passive.ankle
-    exoMomentArms(:,6) = input.phase.parameter(:,input.auxdata.passive.ankle);
-end
-
-exoSlackLength = input.phase.parameter(:,end);
-% else
-%    exoMomentArms = input.phase.parameter; 
-% end
-
-% Calculate length of passive device path
-Lexo = zero(numColPoints,1);
-% if isfield(input.auxdata,'passive')
-    for dof = 1:Ndof
-        if input.auxdata.passive.hip && (dof==input.auxdata.hip_DOF)
-            Lexo = Lexo + -exoMomentArms(:,4).*splinestruct.IK(:,input.auxdata.passive.hip); 
-        end
-        if input.auxdata.passive.knee && (dof==input.auxdata.knee_DOF)
-            Lexo = Lexo + -exoMomentArms(:,5).*splinestruct.IK(:,input.auxdata.passive.knee);
-        end
-        if input.auxdata.passive.ankle && (dof==input.auxdata.ankle_DOF)
-            Lexo = Lexo + -exoMomentArms(:,6).*splinestruct.IK(:,input.auxdata.passive.ankle);
-        end
-    end
-    Lexotilde = Lexo./exoSlackLength;
-% end
 
 % PATH CONSTRAINTS
 % Activation dynamics - De Groote et al. (2009)
@@ -76,21 +41,10 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Exosuit torques
 % Calculate max active force based on subject mass
-Fmax_act = 18.5*input.auxdata.model_mass; %  N/kg * kg
-
+Fmax_act = 15*input.auxdata.model_mass; %  N/kg * kg
 Texo_act_hip = Fmax_act*aD.*exoMomentArms(:,1);
 Texo_act_knee = Fmax_act*aD.*exoMomentArms(:,2);
 Texo_act_ankle = Fmax_act*aD.*exoMomentArms(:,3);
-
-% Calculate max active force based on subject mass
-Fmax_pass = 18.5*input.auxdata.model_mass; % N/kg * kg
-
-% Calculate passive force based on normalized exo path length
-Fexo_pass = Fmax_pass*(exp(35.*(Lexotilde - 0.995)))/5-0.25;
-
-Texo_pass_hip = Fexo_pass.*exoMomentArms(:,4);
-Texo_pass_knee = Fexo_pass.*exoMomentArms(:,5);
-Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,6);
 
 % Moments constraint
 Topt = 150;
@@ -101,7 +55,7 @@ for dof = 1:Ndof
     T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
 
     if dof==input.auxdata.hip_DOF
-        T_sim = T_sim + Texo_act_hip + Texo_pass_hip;
+        T_sim = T_sim + Texo_act_hip;
     end
     if dof==input.auxdata.knee_DOF
         T_sim = T_sim + Texo_act_knee;

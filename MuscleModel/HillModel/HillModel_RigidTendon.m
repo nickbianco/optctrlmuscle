@@ -1,16 +1,16 @@
 function [FM, lMtilde, FMactFL, FMactFV, FMpas, cos_alpha] = HillModel_RigidTendon(a,lMT,vMT,Parameters,ActiveFVParameters,PassiveFLParameters,Faparam)
 
-Fmax = Parameters(1,:);
-lMopt = Parameters(2,:);
-lTs = Parameters(3,:);
-alphaopt = Parameters(4,:);
-vMmax  = Parameters(5,:);
+Fmax = ones(size(a,1),1)*Parameters(1,:);
+lMopt = ones(size(a,1),1)*Parameters(2,:);
+lTs = ones(size(a,1),1)*Parameters(3,:);
+alphaopt = ones(size(a,1),1)*Parameters(4,:);
+vMmax  = ones(size(a,1),1)*Parameters(5,:);
 
 % Hill-type muscle model: geometric relationships
 w = lMopt.*sin(alphaopt);
-lM = sqrt((lMT-lTs).^2+w^2); % Rigid Tendon: lT = lTs
+lM = real(sqrt((lMT-lTs).^2+w.^2)); % Rigid Tendon: lT = lTs
 lMtilde = lM./lMopt;
-lT = lTs*ones(size(lMtilde));
+lT = lTs.*ones(size(lMtilde));
 cos_alpha = (lMT-lT)./lM;
 
 b11 = Faparam(1);
@@ -60,6 +60,6 @@ FMpas = ((t5 - 0.10e1) - PassiveFLParameters(1)) / PassiveFLParameters(2);
 
 % Muscle force
 FM_norm = (FMact+FMpas);
-FM = Fmax*FM_norm;
+FM = Fmax.*FM_norm;
 
 return

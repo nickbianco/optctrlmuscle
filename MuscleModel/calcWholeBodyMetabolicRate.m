@@ -37,11 +37,11 @@ if any(any(e > 1))
     end
 end
 aT      = control(:,numMuscles+1:numMuscles+numDOFs);
-vMtilde = control(:,numMuscles+numDOFs+1:end);
+vMtilde = control(:,numMuscles+numDOFs+1:numMuscles+numDOFs+numMuscles);
 
 % Get states
 a       = state(:,1:numMuscles);
-lMtilde = state(:,numMuscles+1:end);
+lMtilde = state(:,numMuscles+1:numMuscles+numMuscles);
 
 % Metabolic cost
 musclesApoorva = model.getMuscles();

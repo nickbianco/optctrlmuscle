@@ -23,13 +23,14 @@ Misc.DofNames_Input={'hip_flexion_r','knee_angle_r','ankle_angle_r'};
 Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 
 % Optional Input Arguments
-Misc.costfun = 'Act';
+Misc.costfun = '';
 Misc.study = 'SoftExosuitDesign/Topology';
-Misc.activeDOFs = {'hip'};
-Misc.passiveDOFs = {'ankle'};
+Misc.activeDOFs = {'hip','knee','ankle'};
+Misc.passiveDOFs = {'hip','knee','ankle'};
 
 tag = '';
 if ~isempty(Misc.activeDOFs)
+    Misc.costfun = [Misc.costfun 'Act'];
     active_tag = 'a';
     for i = 1:length(Misc.activeDOFs)
         switch Misc.activeDOFs{i}
@@ -45,6 +46,7 @@ if ~isempty(Misc.activeDOFs)
 end
 
 if ~isempty(Misc.passiveDOFs)
+    Misc.costfun = [Misc.costfun 'Pass'];
     passive_tag = 'p';
     for i = 1:length(Misc.passiveDOFs)
         switch Misc.passiveDOFs{i}

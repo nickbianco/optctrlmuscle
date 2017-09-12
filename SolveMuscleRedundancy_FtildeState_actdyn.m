@@ -286,10 +286,15 @@ end
 
 % ExoTopology study: handling possible active + passive device cases
 % Create indicies for parameter array
+
 if strcmp(study{2}, 'Topology')
+    auxdata.hasActiveDevice = false;
+    auxdata.hasPassiveDevice = false;
+    
     numExoParams = 1;
     % Active device indicies
     if ~isempty(Misc.activeDOFs)
+        auxdata.hasActiveDevice = true;
         for i = 1:length(Misc.activeDOFs)
             auxdata.active.hip = 0;
             auxdata.active.knee = 0;
@@ -310,6 +315,7 @@ if strcmp(study{2}, 'Topology')
     end
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
+        auxdata.hasPassiveDevice = true;
         for i = 1:length(Misc.passiveDOFs)
             auxdata.passive.hip = 0;
             auxdata.passive.knee = 0;
@@ -403,12 +409,20 @@ aTmin = -1*ones(1,auxdata.Ndof);
 aTmax = 1*ones(1,auxdata.Ndof);
 aDmin = 0; 
 aDmax = 1;
+sMin = 0;
+sMax = inf;
 switch study{2}
     case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_bounds_lower = [vAmin aTmin dFMin aDmin];
         control_bounds_upper = [vAmax aTmax dFMax aDmax];
     case 'Topology'
-        if isfield(auxdata,'active')
+        if isfield(auxdata,'active') && isfield(auxdata,'passive')
+            control_bounds_lower = [vAmin aTmin dFMin aDmin sMin];
+            control_bounds_upper = [vAmax aTmax dFMax aDmax sMax];
+        elseif ~isfield(auxdata,'active') && isfield(auxdata,'passive')
+            control_bounds_lower = [vAmin aTmin dFMin sMin];
+            control_bounds_upper = [vAmax aTmax dFMax sMax];
+        elseif isfield(auxdata,'active') && ~isfield(auxdata,'passive')            
             control_bounds_lower = [vAmin aTmin dFMin aDmin];
             control_bounds_upper = [vAmax aTmax dFMax aDmax];
         else
@@ -501,8 +515,16 @@ act1_lower = zeros(1, auxdata.NMuscles);
 act1_upper = inf*ones(1, auxdata.NMuscles);
 act2_lower = -inf*ones(1, auxdata.NMuscles);
 act2_upper = ones(1, auxdata.NMuscles)./auxdata.tauAct;
-bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
-bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
+Fexo_pass_lower = 0;
+Fexo_pass_upper = inf;
+if strcmp(study{2},'Topology') && auxdata.hasPassiveDevice
+    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower,Fexo_pass_lower];
+    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper,Fexo_pass_upper];
+else
+    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
+    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
+end
+
 
 % Eventgroup
 % Impose mild periodicity
@@ -520,7 +542,11 @@ switch study{2}
     case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     case 'Topology'
-        if isfield(auxdata,'active')
+        if isfield(auxdata,'active') && isfield(auxdata,'passive')
+            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1) zeros(N,1)];
+        elseif ~isfield(auxdata,'active') && isfield(auxdata,'passive')
+            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) zeros(N,1)];
+        elseif isfield(auxdata,'active') && ~isfield(auxdata,'passive') 
             control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
         else
             control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
@@ -675,7 +701,9 @@ end
 DatStore.Fopt_exo_knee = zeros(auxdata.Ndof,1);
 if strcmp(study{2},'HipKneeAnkle') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
@@ -706,7 +734,9 @@ end
 % abduction assistance
 if strcmp(study{2},'HipExtHipAbd') 
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkle/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
 
@@ -735,7 +765,9 @@ end
 if strcmp(study{2},'HipAnkleMass') 
     
     % Exosuit moment curves
-    ExoCurves = load('/Examples/SoftExosuitDesign/HipAnkleMass/ExoCurves.mat');
+    currentFile = mfilename('fullpath');
+    [currentDir,~] = fileparts(currentFile);
+    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     exoTime = ExoCurves.time;
     % Peaks are body mass normalized so multiply by model mass
     exoAnkleMomentPeaks = ExoCurves.am_peak * model_mass;
