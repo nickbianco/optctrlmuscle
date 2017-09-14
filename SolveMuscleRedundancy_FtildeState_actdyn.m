@@ -286,6 +286,10 @@ end
 
 % ExoTopology study: handling possible active + passive device cases
 % Create indicies for parameter array
+model = org.opensim.modeling.Model(model_path);
+state = model.initSystem();
+model_mass = model.getTotalMass(state);
+auxdata.model_mass = model_mass;
 
 if strcmp(study{2}, 'Topology')
     auxdata.hasActiveDevice = false;
@@ -295,6 +299,7 @@ if strcmp(study{2}, 'Topology')
     % Active device indicies
     if ~isempty(Misc.activeDOFs)
         auxdata.hasActiveDevice = true;
+        auxdata.Fmax_act = 15*auxdata.model_mass; % N/kg * kg
         for i = 1:length(Misc.activeDOFs)
             auxdata.active.hip = 0;
             auxdata.active.knee = 0;
@@ -316,6 +321,7 @@ if strcmp(study{2}, 'Topology')
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
         auxdata.hasPassiveDevice = true;
+        auxdata.passiveStiffness = 1.25*auxdata.model_mass; % k = 100 kN/m for 80 kg subject (van den Bogert 2013)
         for i = 1:length(Misc.passiveDOFs)
             auxdata.passive.hip = 0;
             auxdata.passive.knee = 0;
@@ -578,11 +584,6 @@ end
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 DatStore.p_linreg = zeros(2,auxdata.Ndof);
-
-model = org.opensim.modeling.Model(model_path);
-state = model.initSystem();
-model_mass = model.getTotalMass(state);
-auxdata.model_mass = model_mass;
 
 % Reproduce Quinlivan et al. 2017 study
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
@@ -915,6 +916,19 @@ if strcmp(study{1},'ISB2017')
     elseif strcmp(study{2},'Collins2015') && strcmp(Misc.costfun, 'Exc_Act')
         DatStore.ExoTorques = calcExoTorques_lMtildeISBCollins2015_Exc_Act(...
             OptInfo, DatStore);
+    end
+end
+
+if strcmp(study{2},'Topology')
+    if auxdata.hasActiveDevice && ~auxdata.hasPassiveDevce
+        DatStore.ExoTorques_Act = ...
+            calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo, DatStore);
+    elseif ~auxdata.hasActiveDevice && auxdata.hasPassiveDevice
+        [DatStore.ExoTorques_Pass, DatStore.passiveSlackVar] = ...
+            calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo, DatStore);
+    elseif auxdata.hasActiveDevice && auxdata.hasPassiveDevice
+        [DatStore.ExoTorques_Act, DatStore.ExoTorques_Pass, DatStore.passiveSlackVar] = ...
+            calcExoTorques_Ftilde_vAExoTopology_ActPass(OptInfo, DatStore);
     end
 end
 

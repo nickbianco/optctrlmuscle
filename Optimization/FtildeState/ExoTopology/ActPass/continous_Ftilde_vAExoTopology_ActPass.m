@@ -67,14 +67,13 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 [Hilldiff,F,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
-% Calculate max active force based on subject mass
-Fmax_act = 15*input.auxdata.model_mass; %  N/kg * kg
-Texo_act_hip = Fmax_act*aD.*exoMomentArms(:,1);
-Texo_act_knee = Fmax_act*aD.*exoMomentArms(:,2);
-Texo_act_ankle = Fmax_act*aD.*exoMomentArms(:,3);
+% Active device
+Texo_act_hip = auxdata.Fmax_act*aD.*exoMomentArms(:,1);
+Texo_act_knee = auxdata.Fmax_act*aD.*exoMomentArms(:,2);
+Texo_act_ankle = auxdata.Fmax_act*aD.*exoMomentArms(:,3);
 
 % Calculate passive force based on normalized exo path length
-k = 100; % kN/m - van den Bogert 2013
+k = auxdata.passiveStiffness;
 Fexo_pass = k*(Lexo - exoSlackLength) + s;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,4);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,5);

@@ -10,13 +10,13 @@ splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
 
 % Get controls
-vA   = 100*input.phase.control(:,1:NMuscles);
-aT  = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
-dFtilde  = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD = input.phase.control(:,end);
+vA      = 100*input.phase.control(:,1:NMuscles);
+aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
+dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
+aD      = input.phase.control(:,end);
 
 % Get states
-a       = input.phase.state(:,1:NMuscles);
+a      = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
 
 % Get moment arms
@@ -40,11 +40,10 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 [Hilldiff,F,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
-% Calculate max active force based on subject mass
-Fmax_act = 15*input.auxdata.model_mass; %  N/kg * kg
-Texo_act_hip = Fmax_act*aD.*exoMomentArms(:,1);
-Texo_act_knee = Fmax_act*aD.*exoMomentArms(:,2);
-Texo_act_ankle = Fmax_act*aD.*exoMomentArms(:,3);
+% Active device
+Texo_act_hip = auxdata.Fmax_act*aD.*exoMomentArms(:,1);
+Texo_act_knee = auxdata.Fmax_act*aD.*exoMomentArms(:,2);
+Texo_act_ankle = auxdata.Fmax_act*aD.*exoMomentArms(:,3);
 
 % Moments constraint
 Topt = 150;
