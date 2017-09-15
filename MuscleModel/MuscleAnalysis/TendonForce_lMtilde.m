@@ -12,7 +12,7 @@ tendonStiffnessModifier = ones(size(lMtilde,1),1)*params(6,:);
 % Hill-type muscle model: geometric relationships
 lM = lMtilde.*lMo;
 w = lMo.*sin(alphao);
-lT = lMT - sqrt((lM.^2 - w.^2));
+lT = lMT - real(sqrt((lM.^2 - w.^2)));
 lTtilde = lT./lTs;
 
 % Tendon force-length characteristic

@@ -50,6 +50,10 @@ function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM
 % ----------------------------------------------------------------------- %
 
 % ----------------------------------------------------------------------- %
+
+Misc.muscleStrainModifiers.vas_int_r = 1.5/0.6;
+Misc.tendonStiffnessModifiers.med_gas_r = 35/17.5;
+
 % Based on study and cost function, decide which continuous and endpoint  % 
 % functions to use ------------------------------------------------------ %
 if ~isfield(Misc, 'study') || isempty(Misc.study)
@@ -134,6 +138,14 @@ end
 if ~isfield(Misc, 'tendonStiffnessModifiers') || isempty(Misc.tendonStiffnessModifiers)
     Misc.tendonStiffnessModifiers = [];
 end
+% Modify individual passive muscle strain due to maximum isometric force (e0)
+if ~isfield(Misc, 'muscleStrainModifiers') || isempty(Misc.muscleStrainModifiers)
+    Misc.muscleStrainModifiers = [];
+end
+% Modify individual passive muscle force exponential shape factor (kpe)
+if ~isfield(Misc, 'muscleShapeFactModifiers') || isempty(Misc.muscleShapeFactModifiers)
+    Misc.muscleShapeFactModifiers = [];
+end
 
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
@@ -211,7 +223,7 @@ end
 % Extract the muscle-tendon properties
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
 
-% Modify tendon stiffnesses
+% Modify tendon stiffnesses, muscle strain and muscle force exponential shape factor
 for m = 1:DatStore.nMuscles
     muscle_name = Misc.MuscleNames_Input{m};
     if isfield(Misc.tendonStiffnessModifiers, muscle_name)
@@ -219,11 +231,20 @@ for m = 1:DatStore.nMuscles
     else
         DatStore.params(6,m) = 1;
     end
+    if isfield(Misc.muscleStrainModifiers, muscle_name)
+        DatStore.params(7,m) = Misc.muscleStrainModifiers.(muscle_name);
+    else
+        DatStore.params(7,m) = 1;
+    end
+    if isfield(Misc.muscleShapeFactModifiers, muscle_name)
+        DatStore.params(8,m) = Misc.muscleShapeFactModifiers.(muscle_name);
+    else
+        DatStore.params(8,m) = 1;
+    end
 end
 
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
-
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
 % PART II: OPTIMAL CONTROL PROBLEM FORMULATION -------------------------- %
@@ -296,9 +317,11 @@ auxdata.Faparam = Faparam;
 
 % Parameters of passive muscle force-length characteristic, and tendon
 % characteristic
-e0 = 0.6; kpe = 4; t50 = exp(kpe * (0.2 - 0.10e1) / e0);
+e0 = 0.6*DatStore.params(7,:);
+kpe = 4*DatStore.params(8,:);
+t50 = exp(kpe .* (0.2 - 0.10e1) ./ e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
-auxdata.Fpparam = [pp1;pp2;Misc.tendonStiffnessCoeff];
+auxdata.Fpparam = [pp1;pp2;ones(1,length(pp1))*Misc.tendonStiffnessCoeff];
 
 % Problem bounds 
 e_min = 0; e_max = 1;                   % bounds on muscle excitation
