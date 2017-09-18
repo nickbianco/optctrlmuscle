@@ -70,7 +70,9 @@ end
 if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
    Misc.costfun='Exc_Act';
 end
-tag = [tag '_' Misc.costfun];
+if ~strcmp(Misc.costfun,'Default')
+    tag = [tag '_' Misc.costfun];
+end
 
 % ----------------------------------------------------------------------- %
 % Check for optional input arguments, see manual for details------------- %
@@ -162,10 +164,10 @@ end
 
 if ~strcmp(study{2},'Topology')
     errmsg = [study{2} ': active device DOFs unused'];
-    assert(Misc.activeDOFs == [], errmsg)
+    assert(isempty(Misc.activeDOFs), errmsg)
     
     errmsg = [study{2} ': passive device DOFs unused'];
-    assert(Misc.passiveDOFs == [], errmsg)
+    assert(isempty(Misc.passiveDOFs), errmsg)
 end
 
 % ------------------------------------------------------------------------%
