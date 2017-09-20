@@ -73,6 +73,12 @@ end
 if ~strcmp(Misc.costfun,'Default')
     tag = [tag '_' Misc.costfun];
 end
+% Subcase
+if ~isfield(Misc,'subcase') || isempty(Misc.subcase)
+   Misc.subcase = ''; 
+end
+
+tag = [tag '_' Misc.subcase];
 
 % ----------------------------------------------------------------------- %
 % Check for optional input arguments, see manual for details------------- %
@@ -244,6 +250,7 @@ DatStore = SolveStaticOptimization_IPOPT(DatStore);
 % ----------------------------------------------------------------------- %
 
 % Input arguments
+DatStore.formulation = 'Ftilde';
 auxdata.NMuscles = DatStore.nMuscles;   % number of muscles
 auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 % DatStore.time = DatStore.time;          % time window
@@ -363,7 +370,8 @@ if strcmp(study{2}, 'Topology')
     if (knee_range_min < -100) && (knee_range_max >= 0)
         % TODO, is this case needed?
     elseif (-10 <= knee_range_min && knee_range_min <= 0) && (knee_range_max > 100)
-        DatStore.q_exp(:,auxdata) = -DatStore.q_exp(:,auxdata);
+        DatStore.q_exp(:,auxdata.knee_DOF) = -DatStore.q_exp(:,auxdata.knee_DOF);
+        DatStore.T_exp(:,auxdata.knee_DOF) = -DatStore.T_exp(:,auxdata.knee_DOF);
     end
     
 end
@@ -904,6 +912,7 @@ MActivation = res.state(:,1:auxdata.NMuscles);
 TForcetilde = res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
 TForce = TForcetilde.*(ones(size(Time))*DatStore.Fiso);
 vA=100*res.control(:,1:auxdata.NMuscles);
+dTForcetilde = 10*res.control(:,auxdata.NMuscles+auxdata.Ndof+1:auxdata.NMuscles+auxdata.Ndof+auxdata.NMuscles); 
 MExcitation = computeExcitationRaasch(MActivation, vA, auxdata.tauDeact, auxdata.tauAct);
 RActivation = res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
 OptInfo = output;
@@ -913,14 +922,22 @@ mat.Time = Time;
 mat.DatStore = DatStore;
 mat.OptInfo = OptInfo;
 mat.MuscleNames = MuscleNames;
-MetabolicRate.whole_body = calcWholeBodyMetabolicRate(model, mat);
 
+MetabolicRate.whole_body = calcWholeBodyMetabolicRate(model, mat);
+muscle_energy_rates = calcIndividualMetabolicRate(model, mat);
+for m = 1:length(MuscleNames)
+   MetabolicRate.(MuscleNames{m}) = muscle_energy_rates(end,m);
+end
 DatStore.MetabolicRate = MetabolicRate;
 
 % Tendon force from lMtilde
 % Interpolation lMT
 lMTinterp = interp1(DatStore.time,DatStore.LMT,Time);
-[lM,lMtilde] = FiberLength_Ftilde(TForcetilde, auxdata.params, lMTinterp);
+for m = 1:auxdata.NMuscles
+    LMTSpline(m) = spline(Time,lMTinterp(:,m));
+    [LMT(:,m),VMT(:,m),~] = SplineEval_ppuval(LMTSpline(m),Time,1);
+end
+[lM,lMtilde,vM,vMtilde] = FiberLengthVelocity_Ftilde(TForcetilde,dTForcetilde, auxdata.params, LMT, VMT, auxdata.Fpparam);
 
 if strcmp(study{1},'ISB2017')
     if strcmp(study{2},'Quinlivan2017') && strcmp(Misc.costfun, 'Exc_Act')
@@ -933,7 +950,7 @@ if strcmp(study{1},'ISB2017')
 end
 
 if strcmp(study{2},'Topology')
-    if auxdata.hasActiveDevice && ~auxdata.hasPassiveDevce
+    if auxdata.hasActiveDevice && ~auxdata.hasPassiveDevice
         DatStore.ExoTorques_Act = ...
             calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo, DatStore);
     elseif ~auxdata.hasActiveDevice && auxdata.hasPassiveDevice

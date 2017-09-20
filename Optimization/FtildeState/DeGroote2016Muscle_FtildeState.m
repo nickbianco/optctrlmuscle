@@ -48,7 +48,7 @@ FMtilde2 = b12*exp(-0.5*num2.^2./den2.^2);
 FMltilde = FMtilde1+FMtilde2+FMtilde3;
 
 % Active muscle force-velocity characteristic
-vT = lTs.*dfse./(7*exp(35*(lTtilde-0.995)));
+vT = lTs.*dfse./(7*exp(tendonStiffness.*(lTtilde-0.995)));
 cos_alpha = (lMT-lTs.*lTtilde)./lM;
 vM = (vMT-vT).*cos_alpha;
 vMtilde = vM./vMmax;

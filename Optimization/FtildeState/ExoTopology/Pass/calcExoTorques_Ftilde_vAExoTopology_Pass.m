@@ -1,39 +1,41 @@
 function [ExoTorques_Pass, s] = calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo,DatStore)
 
 time = OptInfo.result.solution.phase.time;
+numColPoints = length(time);
 auxdata = OptInfo.result.setup.auxdata;
 Ndof            = auxdata.Ndof;
-splinestruct    = auxdata.splinestruct;
 
 % Get slack variable
 s = OptInfo.result.solution.phase.control(:,end);
 
 % Get moment arms
+parameter = OptInfo.result.solution.parameter;
 exoMomentArms = zeros(numColPoints,3);
-if input.auxdata.passive.hip
-    exoMomentArms(:,1) = input.phase.parameter(:,auxdata.passive.hip);
+if auxdata.passive.hip
+    exoMomentArms(:,1) = parameter(:,auxdata.passive.hip);
 end
-if input.auxdata.passive.knee
-    exoMomentArms(:,2) = input.phase.parameter(:,auxdata.passive.knee);
+if auxdata.passive.knee
+    exoMomentArms(:,2) = parameter(:,auxdata.passive.knee);
 end
-if input.auxdata.passive.ankle
-    exoMomentArms(:,3) = input.phase.parameter(:,auxdata.passive.ankle);
+if auxdata.passive.ankle
+    exoMomentArms(:,3) = parameter(:,auxdata.passive.ankle);
 end
 
 % Slack length of passive elastic device
-exoSlackLength = input.phase.parameter(:,end);
+exoSlackLength = parameter(:,end);
 
 % Exosuit path length
 Lexo = zeros(numColPoints,1);
+IK = interp1(DatStore.time, DatStore.q_exp, time);
 for dof = 1:Ndof
-    if input.auxdata.passive.hip && (dof==auxdata.hip_DOF)
-        Lexo = Lexo + -exoMomentArms(:,1).*splinestruct.IK(:,input.auxdata.hip_DOF);
+    if auxdata.passive.hip && (dof==auxdata.hip_DOF)
+        Lexo = Lexo + -exoMomentArms(:,1).*IK(:,auxdata.hip_DOF);
     end
-    if input.auxdata.passive.knee && (dof==auxdata.knee_DOF)
-        Lexo = Lexo + -exoMomentArms(:,2).*splinestruct.IK(:,input.auxdata.knee_DOF);
+    if auxdata.passive.knee && (dof==auxdata.knee_DOF)
+        Lexo = Lexo + -exoMomentArms(:,2).*IK(:,auxdata.knee_DOF);
     end
-    if input.auxdata.passive.ankle && (dof==auxdata.ankle_DOF)
-        Lexo = Lexo + -exoMomentArms(:,3).*splinestruct.IK(:,input.auxdata.ankle_DOF);
+    if auxdata.passive.ankle && (dof==auxdata.ankle_DOF)
+        Lexo = Lexo + -exoMomentArms(:,3).*IK(:,auxdata.ankle_DOF);
     end
 end
 

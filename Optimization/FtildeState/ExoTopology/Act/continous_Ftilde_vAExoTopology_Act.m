@@ -41,9 +41,9 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Exosuit torques
 % Active device
-Texo_act_hip = auxdata.Fmax_act*aD.*exoMomentArms(:,1);
-Texo_act_knee = auxdata.Fmax_act*aD.*exoMomentArms(:,2);
-Texo_act_ankle = auxdata.Fmax_act*aD.*exoMomentArms(:,3);
+Texo_act_hip = input.auxdata.Fmax_act*aD.*exoMomentArms(:,1);
+Texo_act_knee = input.auxdata.Fmax_act*aD.*exoMomentArms(:,2);
+Texo_act_ankle = input.auxdata.Fmax_act*aD.*exoMomentArms(:,3);
 
 % Moments constraint
 Topt = 150;

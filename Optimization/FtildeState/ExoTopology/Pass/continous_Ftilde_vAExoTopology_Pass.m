@@ -58,7 +58,7 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Exosuit torques
 % Calculate passive force based on normalized exo path length
-k = auxdata.passiveStiffness;
+k = input.auxdata.passiveStiffness;
 Fexo_pass = k*(Lexo - exoSlackLength) + s;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,1);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2);

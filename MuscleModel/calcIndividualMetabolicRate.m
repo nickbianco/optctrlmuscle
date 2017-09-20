@@ -1,4 +1,4 @@
-function [avg_total_rate] = calcWholeBodyMetabolicRate(model, mat)
+function [norm_average_muscle_energy_rate] = calcIndividualMetabolicRate(model, mat)
 import org.opensim.modeling.*
 
 Time = mat.Time;
@@ -94,7 +94,6 @@ for m = 1:numMuscles
     Fmax = musc.getMaxIsometricForce;   % Max isometric force [N]
     Lceopt = musc.getOptimalFiberLength;         % Optimal fiber length [m]
     maxFiberVel = musc.getMaxContractionVelocity();
-    
     rST = probeUmberger.getRatioSlowTwitchFibers(MuscleNames{m});
     param_rFT = 1 - rST;        % Proportion of fast-twitch muscle fibers
     
@@ -114,15 +113,21 @@ for m = 1:numMuscles
         Vce = vMtilde(i,m)*VCEmax_mps;
         heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F(i,m),Fiso(i,m),e(i,m),a(i,m),paramsUmb);
     end
-    
-    musc_energy_rate(:,m) = heatRates(:,5) * mass;
-    
+    musc_energy_rates(:,:,m) = heatRates(:,:) * mass;
+      
 end
+
+% heatRates = [Activation, Maintenance, Shortening/Lengthening (shortening
+% is negative), Mechanical work rate (positive when shortening), sum]
 
 state = model.initSystem();
 bodyMass = model.getTotalMass(state);
-wholebody_energy_rate = sum(musc_energy_rate,2);
 duration = Time(end) - Time(1);
-norm_average_wholebody_energy_rate = trapz(mat.Time, wholebody_energy_rate) / bodyMass / duration;
-avg_total_rate = norm_average_wholebody_energy_rate;
+
+for i=1:5
+    for m=1:numMuscles
+        norm_average_muscle_energy_rate(i,m) = trapz(mat.Time,musc_energy_rates(:,i,m))/bodyMass/duration;
+    end
+end
+
 end
