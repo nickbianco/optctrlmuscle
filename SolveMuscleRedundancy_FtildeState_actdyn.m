@@ -223,10 +223,12 @@ end
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
 
 % Modify tendon stiffnesses
+fprintf('Muscles with modified tendon stiffness: /n')
 for m = 1:DatStore.nMuscles
     muscle_name = Misc.MuscleNames_Input{m};
     if isfield(Misc.tendonStiffnessModifiers, muscle_name)
         DatStore.params(6,m) = Misc.tendonStiffnessModifiers.(muscle_name);
+        fprintf('--> %s tendon coefficient set to %f',muscle_name,DatStore.params(6,m))
     else
         DatStore.params(6,m) = 1;
     end
@@ -905,6 +907,15 @@ vA=100*res.control(:,1:auxdata.NMuscles);
 MExcitation = computeExcitationRaasch(MActivation, vA, auxdata.tauDeact, auxdata.tauAct);
 RActivation = res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
 OptInfo = output;
+
+% Calculate muscle metabolic rates
+mat.Time = Time;
+mat.DatStore = DatStore;
+mat.OptInfo = OptInfo;
+mat.MuscleNames = MuscleNames;
+MetabolicRate.whole_body = calcWholeBodyMetabolicRate(model, mat);
+
+DatStore.MetabolicRate = MetabolicRate;
 
 % Tendon force from lMtilde
 % Interpolation lMT

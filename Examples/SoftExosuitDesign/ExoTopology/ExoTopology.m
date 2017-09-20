@@ -23,7 +23,7 @@ Misc.DofNames_Input={'hip_flexion_r','knee_angle_r','ankle_angle_r'};
 Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 
 % Optional Input Arguments
-Misc.costfun = '';
+Misc.costfun = 'Default';
 Misc.study = 'SoftExosuitDesign/Topology';
 Misc.activeDOFs = {'hip','knee','ankle'};
 Misc.passiveDOFs = {'hip','knee','ankle'};
