@@ -76,9 +76,9 @@ end
 % Subcase
 if ~isfield(Misc,'subcase') || isempty(Misc.subcase)
    Misc.subcase = ''; 
+else
+   tag = [tag '_' Misc.subcase];
 end
-
-tag = [tag '_' Misc.subcase];
 
 % ----------------------------------------------------------------------- %
 % Check for optional input arguments, see manual for details------------- %
@@ -141,6 +141,14 @@ end
 % Modify individual tendon stiffnesses
 if ~isfield(Misc, 'tendonStiffnessModifiers') || isempty(Misc.tendonStiffnessModifiers)
     Misc.tendonStiffnessModifiers = [];
+end
+% Modify individual passive muscle strain due to maximum isometric force (e0)
+if ~isfield(Misc, 'muscleStrainModifiers') || isempty(Misc.muscleStrainModifiers)
+    Misc.muscleStrainModifiers = [];
+end
+% Modify individual passive muscle force exponential shape factor (kpe)
+if ~isfield(Misc, 'muscleShapeFactModifiers') || isempty(Misc.muscleShapeFactModifiers)
+    Misc.muscleShapeFactModifiers = [];
 end
 % ExoTopology: DOF's assisted by passive device
 if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
@@ -229,16 +237,29 @@ end
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
 
 % Modify tendon stiffnesses
-fprintf('Muscles with modified tendon stiffness: /n')
+fprintf('Muscles with modified tendon stiffness: \n')
 for m = 1:DatStore.nMuscles
     muscle_name = Misc.MuscleNames_Input{m};
     if isfield(Misc.tendonStiffnessModifiers, muscle_name)
         DatStore.params(6,m) = Misc.tendonStiffnessModifiers.(muscle_name);
-        fprintf('--> %s tendon coefficient set to %f',muscle_name,DatStore.params(6,m))
+        fprintf('--> %s tendon coefficient set to %f \n',muscle_name,DatStore.params(6,m))
     else
         DatStore.params(6,m) = 1;
     end
+    if isfield(Misc.muscleStrainModifiers, muscle_name)
+        DatStore.params(7,m) = Misc.muscleStrainModifiers.(muscle_name);
+        fprintf('--> %s muscle strain set to %f \n',muscle_name,DatStore.params(7,m))
+    else
+        DatStore.params(7,m) = 1;
+    end
+    if isfield(Misc.muscleShapeFactModifiers, muscle_name)
+        DatStore.params(8,m) = Misc.muscleShapeFactModifiers.(muscle_name);
+        fprintf('--> %s muscle shape factor set to %f \n',muscle_name,DatStore.params(8,m))
+    else
+        DatStore.params(8,m) = 1;
+    end
 end
+fprintf('\n')
 
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
@@ -332,7 +353,7 @@ if strcmp(study{2}, 'Topology')
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
         auxdata.hasPassiveDevice = true;
-        auxdata.passiveStiffness = 1.25*auxdata.model_mass; % k = 100 kN/m for 80 kg subject (van den Bogert 2013)
+        auxdata.passiveStiffness = 1250*auxdata.model_mass; % k = 100 kN/m for 80kg subject (van den Bogert 2003) 
         for i = 1:length(Misc.passiveDOFs)
             auxdata.passive.hip = 0;
             auxdata.passive.knee = 0;
@@ -366,12 +387,13 @@ if strcmp(study{2}, 'Topology')
     knee_range_max = (180/pi) * knee_coord.getRangeMax;
     
     % Knee should increase joint angle during anterior swing
-    % TODO: make generic to all models?
+    auxdata.kneeAngleSign = 1;
     if (knee_range_min < -100) && (knee_range_max >= 0)
-        % TODO, is this case needed?
+        auxdata.kneeAngleSign = 1;
     elseif (-10 <= knee_range_min && knee_range_min <= 0) && (knee_range_max > 100)
-        DatStore.q_exp(:,auxdata.knee_DOF) = -DatStore.q_exp(:,auxdata.knee_DOF);
-        DatStore.T_exp(:,auxdata.knee_DOF) = -DatStore.T_exp(:,auxdata.knee_DOF);
+        auxdata.kneeAngleSign = -1;
+%         DatStore.q_exp(:,auxdata.knee_DOF) = -DatStore.q_exp(:,auxdata.knee_DOF);
+%         DatStore.T_exp(:,auxdata.knee_DOF) = -DatStore.T_exp(:,auxdata.knee_DOF);
     end
     
 end
@@ -398,9 +420,11 @@ auxdata.Faparam = Faparam;
 
 % Parameters of passive muscle force-length characteristic, and tendon
 % characteristic
-e0 = 0.6; kpe = 4; t50 = exp(kpe * (0.2 - 0.10e1) / e0);
+e0 = 0.6*DatStore.params(7,:); 
+kpe = 4*DatStore.params(8,:); 
+t50 = exp(kpe .* (0.2 - 0.10e1) ./ e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
-auxdata.Fpparam = [pp1;pp2;Misc.tendonStiffnessCoeff];
+auxdata.Fpparam = [pp1;pp2;ones(1,length(pp1))*Misc.tendonStiffnessCoeff];
 
 % Problem bounds 
 a_min = 0; a_max = 1;             % bounds on muscle activation
@@ -925,9 +949,12 @@ mat.MuscleNames = MuscleNames;
 
 MetabolicRate.whole_body = calcWholeBodyMetabolicRate(model, mat);
 muscle_energy_rates = calcIndividualMetabolicRate(model, mat);
-for m = 1:length(MuscleNames)
-   MetabolicRate.(MuscleNames{m}) = muscle_energy_rates(end,m);
+if isnan(muscle_energy_rates)
+    warning(['ERROR: NaN values returned for muscle metabolic rates, ' ...
+             'setting to zeros'])
+    muscle_energy_rates = zeros(1,length(MuscleNames));
 end
+MetabolicRate.individual_muscles = muscle_energy_rates(end,:);
 DatStore.MetabolicRate = MetabolicRate;
 
 % Tendon force from lMtilde
@@ -937,7 +964,8 @@ for m = 1:auxdata.NMuscles
     LMTSpline(m) = spline(Time,lMTinterp(:,m));
     [LMT(:,m),VMT(:,m),~] = SplineEval_ppuval(LMTSpline(m),Time,1);
 end
-[lM,lMtilde,vM,vMtilde] = FiberLengthVelocity_Ftilde(TForcetilde,dTForcetilde, auxdata.params, LMT, VMT, auxdata.Fpparam);
+[lM,lMtilde,vM,vMtilde] = FiberLengthVelocity_Ftilde(TForcetilde,dTForcetilde, ... 
+    auxdata.params, LMT, VMT, auxdata.Fpparam);
 
 if strcmp(study{1},'ISB2017')
     if strcmp(study{2},'Quinlivan2017') && strcmp(Misc.costfun, 'Exc_Act')
@@ -951,13 +979,15 @@ end
 
 if strcmp(study{2},'Topology')
     if auxdata.hasActiveDevice && ~auxdata.hasPassiveDevice
-        DatStore.ExoTorques_Act = ...
+        [DatStore.ExoTorques_Act, DatStore.MomentArms_Act] = ...
             calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo, DatStore);
     elseif ~auxdata.hasActiveDevice && auxdata.hasPassiveDevice
-        [DatStore.ExoTorques_Pass, DatStore.passiveSlackVar] = ...
+        [DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, DatStore.passiveForce, ...
+            DatStore.passiveSlackVar, DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
             calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo, DatStore);
     elseif auxdata.hasActiveDevice && auxdata.hasPassiveDevice
-        [DatStore.ExoTorques_Act, DatStore.ExoTorques_Pass, DatStore.passiveSlackVar] = ...
+        [DatStore.ExoTorques_Act, DatStore.MomentArms_Act, DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, ...
+            DatStore.passiveForce, DatStore.passiveSlackVar, DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
             calcExoTorques_Ftilde_vAExoTopology_ActPass(OptInfo, DatStore);
     end
 end

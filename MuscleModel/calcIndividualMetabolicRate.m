@@ -51,7 +51,7 @@ if any(any(e < 0))
     if any(any(e < -0.1))
         e(e < -0.1)
         warning('VERY negative excitation! Exiting...');
-        avg_total_rate = NaN;
+        norm_average_muscle_energy_rate = NaN;
         return
     else
         warning('Slightly negative excitation...clipping at 0.');
@@ -62,7 +62,7 @@ if any(any(e > 1))
     if any(any(e > 1.1))
         e(e > 1.1)
         warning('Excitation much greater than 1! Exiting...');
-        avg_total_rate = NaN;
+        norm_average_muscle_energy_rate = NaN;
         return
     else
         warning('Excitation slightly greater than 1...clipping at 1.');

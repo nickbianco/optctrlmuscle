@@ -1,4 +1,4 @@
-function [ExoTorques_Act] = calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo,DatStore)
+function [ExoTorques_Act, MomentArms_Act] = calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo,DatStore)
 
 time = OptInfo.result.solution.phase.time;
 numColPoints = length(time);
@@ -20,6 +20,7 @@ end
 if auxdata.active.ankle
     exoMomentArms(:,3) = parameter(:,auxdata.active.ankle);
 end
+MomentArms_Act = exoMomentArms(1,:);
 
 % Exosuit torques
 Texo_act_hip = auxdata.Fmax_act*aD.*exoMomentArms(:,1);

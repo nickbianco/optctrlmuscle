@@ -35,7 +35,7 @@ if input.auxdata.passive.hip
     exoMomentArms(:,4) = input.phase.parameter(:,input.auxdata.passive.hip);
 end
 if input.auxdata.passive.knee
-    exoMomentArms(:,5) = input.phase.parameter(:,input.auxdata.passive.knee);
+    exoMomentArms(:,5) = input.phase.parameter(:,input.auxdata.passive.knee)*input.auxdata.kneeAngleSign;
 end
 if input.auxdata.passive.ankle
     exoMomentArms(:,6) = input.phase.parameter(:,input.auxdata.passive.ankle);
@@ -110,6 +110,6 @@ phaseout.dynamics = [vA dFtilde];
 % OBJECTIVE FUNCTION
 w1 = 1000;
 w2 = 0.01;
-phaseout.integrand = sum(a.^2,2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
+phaseout.integrand = sum(a.^2,2) + w1*(sum(aT.^2,2) + sum(s.^2,2)) + w2*sum((vA/100).^2,2);
 
 

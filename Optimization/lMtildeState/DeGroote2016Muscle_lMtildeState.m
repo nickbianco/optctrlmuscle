@@ -9,6 +9,8 @@ lMo = ones(size(a,1),1)*params(2,:);
 lTs = ones(size(a,1),1)*params(3,:);
 alphao = ones(size(a,1),1)*params(4,:);
 tendonStiffnessModifier = ones(size(a,1),1)*params(6,:);
+muscleStrainModifier = ones(size(a,1),1)*params(7,:);
+muscleShapeFactModifier = ones(size(a,1),1)*params(8,:);
 
 % Hill-type muscle model: geometric relationships
 lM = lMtilde.*lMo;
@@ -17,7 +19,7 @@ lT = lMT - real(sqrt((lM.^2 - w.^2)));
 lTtilde = lT./lTs;
 
 % Tendon force-length characteristic
-tendonStiffness = Fpparam(3)*tendonStiffnessModifier;
+tendonStiffness = Fpparam(3).*tendonStiffnessModifier;
 fse = (exp(tendonStiffness.*(lTtilde - 0.995)))/5-0.25;
 
 % Active muscle force-length characteristic
@@ -59,10 +61,10 @@ FMvtilde = e1*log((e2*vMtilde+e3)+sqrt((e2*vMtilde+e3).^2+1))+e4;
 Fce = a.*FMltilde.*FMvtilde;
 
 % Passive muscle force-length characteristic
-e0 = 0.6;
-kpe = 4;
-t5 = exp(kpe * (lMtilde - 0.10e1) / e0);
-Fpe = ((t5 - 0.10e1) - Fpparam(1)) / Fpparam(2);
+e0 = 0.6*muscleStrainModifier;
+kpe = 4*muscleShapeFactModifier;
+t5 = exp(kpe .* (lMtilde - 0.10e1) ./ e0);
+Fpe = ((t5 - 0.10e1) - Fpparam(1)) ./ Fpparam(2);
 
 % Muscle force
 FM = Fce+Fpe;

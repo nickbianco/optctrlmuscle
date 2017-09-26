@@ -31,7 +31,7 @@ Misc.passiveDOFs = {'hip','knee','ankle'};
 tag = '';
 if ~isempty(Misc.activeDOFs)
     Misc.costfun = [Misc.costfun 'Act'];
-    active_tag = 'a';
+    active_tag = 'act';
     for i = 1:length(Misc.activeDOFs)
         switch Misc.activeDOFs{i}
             case 'hip'
@@ -47,7 +47,7 @@ end
 
 if ~isempty(Misc.passiveDOFs)
     Misc.costfun = [Misc.costfun 'Pass'];
-    passive_tag = 'p';
+    passive_tag = 'pass';
     for i = 1:length(Misc.passiveDOFs)
         switch Misc.passiveDOFs{i}
             case 'hip'

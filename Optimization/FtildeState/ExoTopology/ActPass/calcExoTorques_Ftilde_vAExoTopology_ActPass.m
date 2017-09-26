@@ -1,13 +1,13 @@
-function [ExoTorques_Act, ExoTorques_Pass, s] = calcExoTorques_Ftilde_vAExoTopology_ActPass(OptInfo,DatStore)
+function [ExoTorques_Act, MomentArms_Act, ExoTorques_Pass, MomentArms_Pass, Fexo_pass, s, Lexo, IK] = calcExoTorques_Ftilde_vAExoTopology_ActPass(OptInfo,DatStore)
 
 time = OptInfo.result.solution.phase.time;
 numColPoints = length(time);
 auxdata = OptInfo.result.setup.auxdata;
-Ndof            = auxdata.Ndof;
+Ndof = auxdata.Ndof;
 
 % Get active device control and passive slack variable
 aD = OptInfo.result.solution.phase.control(:,end-1);
-s  = OptInfo.result.solution.phase.control(:,end-1);
+s  = OptInfo.result.solution.phase.control(:,end);
 
 % Get moment arms
 parameter = OptInfo.result.solution.parameter;
@@ -30,19 +30,22 @@ end
 if auxdata.passive.ankle
     exoMomentArms(:,6) = parameter(:,auxdata.passive.ankle);
 end
+MomentArms_Act = exoMomentArms(1,1:3);
+MomentArms_Pass = exoMomentArms(1,4:6);
 
 % Slack length of passive elastic device
 exoSlackLength = parameter(:,end);
+slackLength = exoSlackLength(1);
 
 % Exosuit path length
 Lexo = zeros(numColPoints,1);
-IK = interp1(DatStore.time, DatStore.q_exp, time);
+IK = interp1(DatStore.time, (pi/180)*DatStore.q_exp, time);
 for dof = 1:Ndof
     if auxdata.passive.hip && (dof==auxdata.hip_DOF)
         Lexo = Lexo + -exoMomentArms(:,4).*IK(:,auxdata.hip_DOF);
     end
     if auxdata.passive.knee && (dof==auxdata.knee_DOF)
-        Lexo = Lexo + -exoMomentArms(:,5).*IK(:,auxdata.knee_DOF);
+        Lexo = Lexo + -exoMomentArms(:,5).*IK(:,auxdata.knee_DOF)*auxdata.kneeAngleSign;
     end
     if auxdata.passive.ankle && (dof==auxdata.ankle_DOF)
         Lexo = Lexo + -exoMomentArms(:,6).*IK(:,auxdata.ankle_DOF);
