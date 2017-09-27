@@ -50,9 +50,15 @@ end
 if any(any(e < 0))
     if any(any(e < -0.1))
         e(e < -0.1)
-        warning('VERY negative excitation! Exiting...');
-        norm_average_muscle_energy_rate = NaN;
-        return
+        warning('VERY negative excitation! ')
+        if length(e(e < -0.1)) < 5
+            fprintf('But very few time points...still clipping at 0.')
+            e(e < 0) = 0;
+        else
+            fprint('Exiting...')
+            norm_average_muscle_energy_rate = NaN;
+            return
+        end
     else
         warning('Slightly negative excitation...clipping at 0.');
         e(e < 0) = 0;
@@ -61,9 +67,15 @@ end
 if any(any(e > 1))
     if any(any(e > 1.1))
         e(e > 1.1)
-        warning('Excitation much greater than 1! Exiting...');
-        norm_average_muscle_energy_rate = NaN;
-        return
+        warning('Excitation much greater than 1!');
+        if length(e(e > 1.1)) < 5
+            fprintf('But very few time points...still clipping at 1.')
+            e(e > 1) = 1;
+        else
+            fprint('Exiting...')
+            norm_average_muscle_energy_rate = NaN;
+            return
+        end
     else
         warning('Excitation slightly greater than 1...clipping at 1.');
         e(e > 1) = 1;

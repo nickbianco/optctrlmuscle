@@ -13,8 +13,8 @@ numColPoints    = size(input.phase.state,1);
 vA   = 100*input.phase.control(:,1:NMuscles);
 aT  = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde  = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD = input.phase.control(:,end-1);
-s = input.phase.control(:,end);
+aD = input.phase.control(:,end);
+% s = input.phase.control(:,end);
 
 % Get states
 a       = input.phase.state(:,1:NMuscles);
@@ -35,7 +35,7 @@ if input.auxdata.passive.hip
     exoMomentArms(:,4) = input.phase.parameter(:,input.auxdata.passive.hip);
 end
 if input.auxdata.passive.knee
-    exoMomentArms(:,5) = input.phase.parameter(:,input.auxdata.passive.knee)*input.auxdata.kneeAngleSign;
+    exoMomentArms(:,5) = input.phase.parameter(:,input.auxdata.passive.knee);
 end
 if input.auxdata.passive.ankle
     exoMomentArms(:,6) = input.phase.parameter(:,input.auxdata.passive.ankle);
@@ -45,7 +45,8 @@ end
 exoSlackLength = input.phase.parameter(:,end);
 
 % Exosuit path length
-Lexo = zeros(numColPoints,1);
+Lexo = ones(numColPoints,1);
+splinestruct.IK(:,input.auxdata.knee_DOF) = input.auxdata.kneeAngleSign*splinestruct.IK(:,input.auxdata.knee_DOF);
 for dof = 1:Ndof
     if input.auxdata.passive.hip && (dof==input.auxdata.hip_DOF)
         Lexo = Lexo + -exoMomentArms(:,4).*splinestruct.IK(:,input.auxdata.hip_DOF);
@@ -56,6 +57,7 @@ for dof = 1:Ndof
     if input.auxdata.passive.ankle && (dof==input.auxdata.ankle_DOF)
         Lexo = Lexo + -exoMomentArms(:,6).*splinestruct.IK(:,input.auxdata.ankle_DOF);
     end
+    Lexotilde = Lexo./exoSlackLength;
 end
 
 % PATH CONSTRAINTS
@@ -74,7 +76,8 @@ Texo_act_ankle = input.auxdata.Fmax_act*aD.*exoMomentArms(:,3);
 
 % Calculate passive force based on normalized exo path length
 k = input.auxdata.passiveStiffness;
-Fexo_pass = k*(Lexo - exoSlackLength) + s;
+Fexo_pass = k*(exp(35.*(Lexotilde - 0.995)))/5-0.25;
+%Fexo_pass = k*(Lexo - exoSlackLength) + s;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,4);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,5);
 Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,6);
@@ -100,7 +103,7 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff Hilldiff act1 act2 Fexo_pass];
+phaseout.path = [Tdiff Hilldiff act1 act2];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit
@@ -110,6 +113,6 @@ phaseout.dynamics = [vA dFtilde];
 % OBJECTIVE FUNCTION
 w1 = 1000;
 w2 = 0.01;
-phaseout.integrand = sum(a.^2,2) + w1*(sum(aT.^2,2) + sum(s.^2,2)) + w2*sum((vA/100).^2,2);
+phaseout.integrand = sum(a.^2,2) + w1*sum(aT.^2,2) + w2*sum((vA/100).^2,2);
 
 

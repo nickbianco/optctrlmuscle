@@ -332,10 +332,10 @@ if strcmp(study{2}, 'Topology')
     if ~isempty(Misc.activeDOFs)
         auxdata.hasActiveDevice = true;
         auxdata.Fmax_act = 15*auxdata.model_mass; % N/kg * kg
+        auxdata.active.hip = 0;
+        auxdata.active.knee = 0;
+        auxdata.active.ankle = 0;
         for i = 1:length(Misc.activeDOFs)
-            auxdata.active.hip = 0;
-            auxdata.active.knee = 0;
-            auxdata.active.ankle = 0;
             switch Misc.activeDOFs{i}
                 case 'hip'
                     auxdata.active.hip = numExoParams;
@@ -353,11 +353,11 @@ if strcmp(study{2}, 'Topology')
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
         auxdata.hasPassiveDevice = true;
-        auxdata.passiveStiffness = 1250*auxdata.model_mass; % k = 100 kN/m for 80kg subject (van den Bogert 2003) 
+        auxdata.passiveStiffness = 50*auxdata.model_mass; % k = 100 kN/m for 80kg subject (van den Bogert 2003) 
+        auxdata.passive.hip = 0;
+        auxdata.passive.knee = 0;
+        auxdata.passive.ankle = 0;
         for i = 1:length(Misc.passiveDOFs)
-            auxdata.passive.hip = 0;
-            auxdata.passive.knee = 0;
-            auxdata.passive.ankle = 0;
             switch Misc.passiveDOFs{i}
                 case 'hip'
                     auxdata.passive.hip = numExoParams;
@@ -459,8 +459,8 @@ switch study{2}
         control_bounds_upper = [vAmax aTmax dFMax aDmax];
     case 'Topology'
         if isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_bounds_lower = [vAmin aTmin dFMin aDmin sMin];
-            control_bounds_upper = [vAmax aTmax dFMax aDmax sMax];
+            control_bounds_lower = [vAmin aTmin dFMin aDmin];
+            control_bounds_upper = [vAmax aTmax dFMax aDmax];
         elseif ~isfield(auxdata,'active') && isfield(auxdata,'passive')
             control_bounds_lower = [vAmin aTmin dFMin sMin];
             control_bounds_upper = [vAmax aTmax dFMax sMax];
@@ -542,8 +542,8 @@ switch study{2}
         bounds.parameter.upper = force_level_upper;
     case 'Topology'
         if isfield(auxdata,'passive')
-            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) -0.3];
-            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 0.3];
+            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) 0.7];
+            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 1.3];
         else
             bounds.parameter.lower = -0.1*ones(1,auxdata.numExoParams);
             bounds.parameter.upper = 0.1*ones(1,auxdata.numExoParams);
@@ -560,8 +560,8 @@ act2_upper = ones(1, auxdata.NMuscles)./auxdata.tauAct;
 Fexo_pass_lower = 0;
 Fexo_pass_upper = inf;
 if strcmp(study{2},'Topology') && auxdata.hasPassiveDevice
-    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower,Fexo_pass_lower];
-    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper,Fexo_pass_upper];
+    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower]; %,Fexo_pass_lower];
+    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper]; %,Fexo_pass_upper];
 else
     bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
     bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
@@ -585,9 +585,9 @@ switch study{2}
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     case 'Topology'
         if isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1) zeros(N,1)];
+            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)]; % zeros(N,1)];
         elseif ~isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) zeros(N,1)];
+            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)]; % zeros(N,1)];
         elseif isfield(auxdata,'active') && ~isfield(auxdata,'passive') 
             control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
         else
@@ -614,7 +614,11 @@ switch study{2}
     case 'Quinlivan2017'
         guess.parameter = 4;
     case 'Topology'
-        guess.parameter = zeros(1,auxdata.numExoParams);
+       if auxdata.hasPassiveDevice
+           guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
+       else
+           guess.parameter = zeros(1,auxdata.numExoParams);
+       end
 end
 
 % Empty exosuit force and torque data structures
@@ -987,7 +991,7 @@ if strcmp(study{2},'Topology')
             calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo, DatStore);
     elseif auxdata.hasActiveDevice && auxdata.hasPassiveDevice
         [DatStore.ExoTorques_Act, DatStore.MomentArms_Act, DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, ...
-            DatStore.passiveForce, DatStore.passiveSlackVar, DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
+            DatStore.passiveForce, DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
             calcExoTorques_Ftilde_vAExoTopology_ActPass(OptInfo, DatStore);
     end
 end
