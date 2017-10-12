@@ -2,7 +2,7 @@
 % All muscle-tendon characteristics are fully described in the publication
 % and its online supplement
 
-function [err, FT, F, Fiso] = DeGroote2016Muscle_FtildeState(a,fse,dfse,lMT,vMT,params,Fvparam,Fpparam,Faparam)
+function [err, FT, F, Fiso, vMtilde] = DeGroote2016Muscle_FtildeState(a,fse,dfse,lMT,vMT,params,Fvparam,Fpparam,Faparam)
 
 FMo = ones(size(a,1),1)*params(1,:);
 lMo = ones(size(a,1),1)*params(2,:);

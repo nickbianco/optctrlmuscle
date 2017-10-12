@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Pass(input)
+function phaseout = continous_Ftilde_vAExoTopology_MinAlex_Pass(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -24,7 +24,7 @@ if input.auxdata.passive.hip
     exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.passive.hip);
 end
 if input.auxdata.passive.knee
-    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.passive.knee);
+    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.passive.knee)*input.auxdata.kneeAngleSign;
 end
 if input.auxdata.passive.ankle
     exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.passive.ankle);
@@ -56,7 +56,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff,F,~,~,vMtilde] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
 % Calculate passive force based on normalized exo path length
@@ -65,7 +65,7 @@ k = input.auxdata.passiveStiffness;
 % zeroBelowOneNormLength = 0.16*(1 ./ (1 + exp(100 * (Lexotilde - 0.995))));
 % Fexo_pass = k*(nonLinStiff + zeroBelowOneNormLength);
 positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.025) - Lexo))));
-Fexo_pass = (k*(Lexo - exoSlackLength)) .* positiveStiffnessAboveLslack;
+Fexo_pass = k*(Lexo - exoSlackLength) .* positiveStiffnessAboveLslack;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,1);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2);
 Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,3);
@@ -99,8 +99,17 @@ phaseout.path = [Tdiff Hilldiff act1 act2];
 phaseout.dynamics = [vA dFtilde];
 
 % OBJECTIVE FUNCTION
-w1 = 1000;
+% Calculate metabolic rate from Minetti & Alexander (1997) model
+vmax = params(5,:);  
+Fo = params(1,:);   
+Edot = zeros(numColPoints,NMuscles);
+for m = 1:NMuscles
+    v = vmax(1,m)*vMtilde(:,m);
+    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
+end
+
+w1 = 10000;
 w2 = 0.01;
-phaseout.integrand = sum(a.^2,2)+ w1*sum(aT.^2,2) + w2*sum((vA/100).^2,2);
+phaseout.integrand = sum(Edot,2)+ w1*sum(aT.^2,2) + w2*sum((vA/100).^2,2);
 
 

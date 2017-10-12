@@ -353,7 +353,7 @@ if strcmp(study{2}, 'Topology')
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
         auxdata.hasPassiveDevice = true;
-        auxdata.passiveStiffness = 50*auxdata.model_mass; % k = 100 kN/m for 80kg subject (van den Bogert 2003) 
+        auxdata.passiveStiffness = 1000*auxdata.model_mass; % k ~= 100 kN/m for 80kg subject (van den Bogert 2003) 
         auxdata.passive.hip = 0;
         auxdata.passive.knee = 0;
         auxdata.passive.ankle = 0;
@@ -392,8 +392,6 @@ if strcmp(study{2}, 'Topology')
         auxdata.kneeAngleSign = 1;
     elseif (-10 <= knee_range_min && knee_range_min <= 0) && (knee_range_max > 100)
         auxdata.kneeAngleSign = -1;
-%         DatStore.q_exp(:,auxdata.knee_DOF) = -DatStore.q_exp(:,auxdata.knee_DOF);
-%         DatStore.T_exp(:,auxdata.knee_DOF) = -DatStore.T_exp(:,auxdata.knee_DOF);
     end
     
 end
@@ -451,20 +449,12 @@ aTmin = -1*ones(1,auxdata.Ndof);
 aTmax = 1*ones(1,auxdata.Ndof);
 aDmin = 0; 
 aDmax = 1;
-sMin = 0;
-sMax = inf;
 switch study{2}
     case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_bounds_lower = [vAmin aTmin dFMin aDmin];
         control_bounds_upper = [vAmax aTmax dFMax aDmax];
     case 'Topology'
-        if isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_bounds_lower = [vAmin aTmin dFMin aDmin];
-            control_bounds_upper = [vAmax aTmax dFMax aDmax];
-        elseif ~isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_bounds_lower = [vAmin aTmin dFMin sMin];
-            control_bounds_upper = [vAmax aTmax dFMax sMax];
-        elseif isfield(auxdata,'active') && ~isfield(auxdata,'passive')            
+        if auxdata.hasActiveDevice
             control_bounds_lower = [vAmin aTmin dFMin aDmin];
             control_bounds_upper = [vAmax aTmax dFMax aDmax];
         else
@@ -541,9 +531,9 @@ switch study{2}
         bounds.parameter.lower = force_level_lower;
         bounds.parameter.upper = force_level_upper;
     case 'Topology'
-        if isfield(auxdata,'passive')
-            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) 0.7];
-            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 1.3];
+        if auxdata.hasPassiveDevice
+            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) -0.3];
+            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 0.3];
         else
             bounds.parameter.lower = -0.1*ones(1,auxdata.numExoParams);
             bounds.parameter.upper = 0.1*ones(1,auxdata.numExoParams);
@@ -557,16 +547,8 @@ act1_lower = zeros(1, auxdata.NMuscles);
 act1_upper = inf*ones(1, auxdata.NMuscles);
 act2_lower = -inf*ones(1, auxdata.NMuscles);
 act2_upper = ones(1, auxdata.NMuscles)./auxdata.tauAct;
-Fexo_pass_lower = 0;
-Fexo_pass_upper = inf;
-if strcmp(study{2},'Topology') && auxdata.hasPassiveDevice
-    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower]; %,Fexo_pass_lower];
-    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper]; %,Fexo_pass_upper];
-else
-    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
-    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
-end
-
+bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
+bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
 
 % Eventgroup
 % Impose mild periodicity
@@ -584,11 +566,7 @@ switch study{2}
     case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     case 'Topology'
-        if isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)]; % zeros(N,1)];
-        elseif ~isfield(auxdata,'active') && isfield(auxdata,'passive')
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)]; % zeros(N,1)];
-        elseif isfield(auxdata,'active') && ~isfield(auxdata,'passive') 
+        if auxdata.hasActiveDevice
             control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
         else
             control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
@@ -615,7 +593,8 @@ switch study{2}
         guess.parameter = 4;
     case 'Topology'
        if auxdata.hasPassiveDevice
-           guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
+%            guess.parameter = [zeros(1,auxdata.numExoParams-1) Lo];
+           guess.parameter = zeros(1,auxdata.numExoParams);
        else
            guess.parameter = zeros(1,auxdata.numExoParams);
        end
@@ -904,6 +883,24 @@ if isunix
         system(sprintf('rm -f %s',pathLock));
     end
 elseif ispc
+    
+%     currentFile = mfilename('fullpath');
+%     [currentDir,~] = fileparts(currentFile);
+%     pathLock=fullfile(currentDir, 'locktemp', 'lockFile.txt');
+%     
+%     % If lock file exists, wait until it is deleted by a parallel process
+%     while true
+%         if ~(exist(pathLock,'file')==2)
+%            break 
+%         end
+%         pause(5) % wait 5 seconds
+%     end
+%     
+%     % Create a new lock file for this process
+%     fid = fopen(pathLock,'wt');
+%     fclose(fid)
+    
+    % Perform serialzied task
     tdummy = guess.phase.time;
     splinestruct = SplineInputData(tdummy,input);
     splinenames = fieldnames(splinestruct);
@@ -914,6 +911,10 @@ elseif ispc
     end
     setup.auxdata.splinestruct = splinestructad;
     adigatorGenFiles4gpops2(setup)
+% 
+%     % Remove the lockfile
+%     system(sprintf('del %s',pathLock))
+
 else
     error('Platform unknown.')
 end
@@ -987,7 +988,7 @@ if strcmp(study{2},'Topology')
             calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo, DatStore);
     elseif ~auxdata.hasActiveDevice && auxdata.hasPassiveDevice
         [DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, DatStore.passiveForce, ...
-            DatStore.passiveSlackVar, DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
+            DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
             calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo, DatStore);
     elseif auxdata.hasActiveDevice && auxdata.hasPassiveDevice
         [DatStore.ExoTorques_Act, DatStore.MomentArms_Act, DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, ...

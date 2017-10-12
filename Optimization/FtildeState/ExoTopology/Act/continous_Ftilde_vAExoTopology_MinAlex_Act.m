@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Act(input)
+function phaseout = continous_Ftilde_vAExoTopology_MinAlex_Act(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -37,7 +37,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff,F,~,~,vMtilde] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
 % Active device
@@ -74,8 +74,17 @@ phaseout.path = [Tdiff Hilldiff act1 act2];
 phaseout.dynamics = [vA dFtilde];
 
 % OBJECTIVE FUNCTION
-w1 = 1000;
+% Calculate metabolic rate from Minetti & Alexander (1997) model
+vmax = params(5,:);  
+Fo = params(1,:);   
+Edot = zeros(numColPoints,NMuscles);
+for m = 1:NMuscles
+    v = vmax(1,m)*vMtilde(:,m);
+    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
+end
+
+w1 = 10000;
 w2 = 0.01;
-phaseout.integrand = sum(a.^2,2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
+phaseout.integrand = sum(Edot,2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
 
 

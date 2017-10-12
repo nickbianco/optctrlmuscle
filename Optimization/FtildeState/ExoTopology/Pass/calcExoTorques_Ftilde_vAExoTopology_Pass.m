@@ -1,12 +1,9 @@
-function [ExoTorques_Pass, MomentArms_Pass, Fexo_pass, s, Lexo, IK, slackLength] = calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo,DatStore)
+function [ExoTorques_Pass, MomentArms_Pass, Fexo_pass, Lexo, IK, slackLength] = calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo,DatStore)
 
 time = OptInfo.result.solution.phase.time;
 numColPoints = length(time);
 auxdata = OptInfo.result.setup.auxdata;
-Ndof            = auxdata.Ndof;
-
-% Get slack variable
-s = OptInfo.result.solution.phase.control(:,end);
+Ndof = auxdata.Ndof;
 
 % Get moment arms
 parameter = OptInfo.result.solution.parameter;
@@ -27,6 +24,7 @@ exoSlackLength = parameter(:,end);
 slackLength = exoSlackLength(1);
 
 % Exosuit path length
+% Lexo = 10*ones(numColPoints,1);
 Lexo = zeros(numColPoints,1);
 IK = interp1(DatStore.time, (pi/180)*DatStore.q_exp, time);
 for dof = 1:Ndof
@@ -40,10 +38,15 @@ for dof = 1:Ndof
         Lexo = Lexo + -exoMomentArms(:,3).*IK(:,auxdata.ankle_DOF);
     end
 end
+% Lexotilde = Lexo./exoSlackLength;
 
 % Calculate passive force based on normalized exo path length
 k = auxdata.passiveStiffness;
-Fexo_pass = k*(Lexo - exoSlackLength) + s;
+% nonLinStiff = (exp(35.*(Lexotilde - 0.995)))/5-0.25;
+% zeroBelowOneNormLength = 0.16*(1 ./ (1 + exp(100 * (Lexotilde - 0.995))));
+% Fexo_pass = k*(nonLinStiff + zeroBelowOneNormLength);
+positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.025) - Lexo))));
+Fexo_pass = k*(Lexo - exoSlackLength) .* positiveStiffnessAboveLslack;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,1);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2);
 Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,3);
