@@ -353,7 +353,7 @@ if strcmp(study{2}, 'Topology')
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
         auxdata.hasPassiveDevice = true;
-        auxdata.passiveStiffness = 1000*auxdata.model_mass; % k ~= 100 kN/m for 80kg subject (van den Bogert 2003) 
+        auxdata.passiveStiffness = 100*auxdata.model_mass; % k ~= 100 kN/m for 80kg subject (van den Bogert 2003) 
         auxdata.passive.hip = 0;
         auxdata.passive.knee = 0;
         auxdata.passive.ankle = 0;
@@ -532,8 +532,8 @@ switch study{2}
         bounds.parameter.upper = force_level_upper;
     case 'Topology'
         if auxdata.hasPassiveDevice
-            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) -0.3];
-            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 0.3];
+            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) 0.5];
+            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 1.5];
         else
             bounds.parameter.lower = -0.1*ones(1,auxdata.numExoParams);
             bounds.parameter.upper = 0.1*ones(1,auxdata.numExoParams);
@@ -593,8 +593,7 @@ switch study{2}
         guess.parameter = 4;
     case 'Topology'
        if auxdata.hasPassiveDevice
-%            guess.parameter = [zeros(1,auxdata.numExoParams-1) Lo];
-           guess.parameter = zeros(1,auxdata.numExoParams);
+           guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
        else
            guess.parameter = zeros(1,auxdata.numExoParams);
        end
@@ -884,12 +883,11 @@ if isunix
     end
 elseif ispc
     
-%     currentFile = mfilename('fullpath');
-%     [currentDir,~] = fileparts(currentFile);
-%     pathLock=fullfile(currentDir, 'locktemp', 'lockFile.txt');
+%     pathLock=fullfile('C:\Users\Nick\temp\lockfile', 'lockFile.txt');
 %     
 %     % If lock file exists, wait until it is deleted by a parallel process
 %     while true
+%         pause(5) % wait 5 seconds
 %         if ~(exist(pathLock,'file')==2)
 %            break 
 %         end
@@ -898,7 +896,7 @@ elseif ispc
 %     
 %     % Create a new lock file for this process
 %     fid = fopen(pathLock,'wt');
-%     fclose(fid)
+%     fclose(fid);
     
     % Perform serialzied task
     tdummy = guess.phase.time;
@@ -911,7 +909,7 @@ elseif ispc
     end
     setup.auxdata.splinestruct = splinestructad;
     adigatorGenFiles4gpops2(setup)
-% 
+
 %     % Remove the lockfile
 %     system(sprintf('del %s',pathLock))
 

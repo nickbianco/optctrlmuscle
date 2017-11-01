@@ -34,8 +34,7 @@ end
 exoSlackLength = input.phase.parameter(:,end);
 
 % Exosuit path length
-% Lexo = 10*ones(numColPoints,1);
-Lexo = zeros(numColPoints,1);
+Lexo = ones(numColPoints,1);
 splinestruct.IK(:,input.auxdata.knee_DOF) = input.auxdata.kneeAngleSign*splinestruct.IK(:,input.auxdata.knee_DOF);
 for dof = 1:Ndof
     if input.auxdata.passive.hip && (dof==input.auxdata.hip_DOF)
@@ -48,7 +47,6 @@ for dof = 1:Ndof
         Lexo = Lexo + -exoMomentArms(:,3).*splinestruct.IK(:,input.auxdata.ankle_DOF);
     end
 end
-% Lexotilde = Lexo./exoSlackLength;
 
 % PATH CONSTRAINTS
 % Activation dynamics - De Groote et al. (2009)
@@ -61,11 +59,8 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 % Exosuit torques
 % Calculate passive force based on normalized exo path length
 k = input.auxdata.passiveStiffness;
-% nonLinStiff = (exp(35.*(Lexotilde - 0.995)))/5-0.25;
-% zeroBelowOneNormLength = 0.16*(1 ./ (1 + exp(100 * (Lexotilde - 0.995))));
-% Fexo_pass = k*(nonLinStiff + zeroBelowOneNormLength);
-positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.025) - Lexo))));
-Fexo_pass = (k*(Lexo - exoSlackLength)) .* positiveStiffnessAboveLslack;
+positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.075) - Lexo))));
+Fexo_pass = k*(Lexo - exoSlackLength) .* positiveStiffnessAboveLslack;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,1);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2);
 Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,3);

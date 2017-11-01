@@ -24,8 +24,7 @@ exoSlackLength = parameter(:,end);
 slackLength = exoSlackLength(1);
 
 % Exosuit path length
-% Lexo = 10*ones(numColPoints,1);
-Lexo = zeros(numColPoints,1);
+Lexo = ones(numColPoints,1);
 IK = interp1(DatStore.time, (pi/180)*DatStore.q_exp, time);
 for dof = 1:Ndof
     if auxdata.passive.hip && (dof==auxdata.hip_DOF)
@@ -38,14 +37,10 @@ for dof = 1:Ndof
         Lexo = Lexo + -exoMomentArms(:,3).*IK(:,auxdata.ankle_DOF);
     end
 end
-% Lexotilde = Lexo./exoSlackLength;
 
 % Calculate passive force based on normalized exo path length
 k = auxdata.passiveStiffness;
-% nonLinStiff = (exp(35.*(Lexotilde - 0.995)))/5-0.25;
-% zeroBelowOneNormLength = 0.16*(1 ./ (1 + exp(100 * (Lexotilde - 0.995))));
-% Fexo_pass = k*(nonLinStiff + zeroBelowOneNormLength);
-positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.025) - Lexo))));
+positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.075) - Lexo))));
 Fexo_pass = k*(Lexo - exoSlackLength) .* positiveStiffnessAboveLslack;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,1);
 Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2);
