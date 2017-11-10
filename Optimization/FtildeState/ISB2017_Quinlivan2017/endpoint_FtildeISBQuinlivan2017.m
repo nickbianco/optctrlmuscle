@@ -1,4 +1,4 @@
-function output = endpoint_FtildeExoTopology_MinAlex_Act(input)
+function output = endpoint_FtildeISBQuinlivan2017(input)
 
 q = input.phase.integral;
 output.objective = q;

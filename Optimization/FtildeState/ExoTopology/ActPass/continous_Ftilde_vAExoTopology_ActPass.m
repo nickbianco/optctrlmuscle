@@ -13,7 +13,7 @@ numColPoints    = size(input.phase.state,1);
 vA   = 100*input.phase.control(:,1:NMuscles);
 aT  = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde  = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD = input.phase.control(:,end);
+aD = input.phase.control(:,end-(input.auxdata.numActiveDOFs-1):end);
 
 % Get states
 a       = input.phase.state(:,1:NMuscles);
@@ -21,14 +21,32 @@ Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
 
 % Get moment arms
 exoMomentArms = zeros(numColPoints,6);
+aD_hip = zeros(numColPoints,1);
+aD_knee = zeros(numColPoints,1);
+aD_ankle = zeros(numColPoints,1);
 if input.auxdata.active.hip
     exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
+    if input.auxdata.numActiveDOFs > 1
+        aD_hip = aD(:,input.auxdata.active.hip);
+    else
+        aD_hip = aD;
+    end
 end
 if input.auxdata.active.knee
     exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.active.knee);
+    if input.auxdata.numActiveDOFs > 1
+        aD_knee = aD(:,input.auxdata.active.knee);
+    else
+        aD_knee = aD;
+    end
 end
 if input.auxdata.active.ankle
     exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
+    if input.auxdata.numActiveDOFs > 1
+        aD_ankle = aD(:,input.auxdata.active.ankle);
+    else
+        aD_ankle = aD;
+    end
 end
 if input.auxdata.passive.hip
     exoMomentArms(:,4) = input.phase.parameter(:,input.auxdata.passive.hip);
@@ -45,13 +63,13 @@ exoSlackLength = input.phase.parameter(:,end);
 
 % Exosuit path length
 Lexo = ones(numColPoints,1);
-splinestruct.IK(:,input.auxdata.knee_DOF) = input.auxdata.kneeAngleSign*splinestruct.IK(:,input.auxdata.knee_DOF);
+IK_knee = input.auxdata.kneeAngleSign*splinestruct.IK(:,input.auxdata.knee_DOF);
 for dof = 1:Ndof
     if input.auxdata.passive.hip && (dof==input.auxdata.hip_DOF)
         Lexo = Lexo + -exoMomentArms(:,4).*splinestruct.IK(:,input.auxdata.hip_DOF);
     end
     if input.auxdata.passive.knee && (dof==input.auxdata.knee_DOF)
-        Lexo = Lexo + -exoMomentArms(:,5).*splinestruct.IK(:,input.auxdata.knee_DOF);
+        Lexo = Lexo + -exoMomentArms(:,5).*IK_knee;
     end
     if input.auxdata.passive.ankle && (dof==input.auxdata.ankle_DOF)
         Lexo = Lexo + -exoMomentArms(:,6).*splinestruct.IK(:,input.auxdata.ankle_DOF);
@@ -68,16 +86,16 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Exosuit torques
 % Active device
-Texo_act_hip = input.auxdata.Fmax_act*aD.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Fmax_act*aD.*exoMomentArms(:,2);
-Texo_act_ankle = input.auxdata.Fmax_act*aD.*exoMomentArms(:,3);
+Texo_act_hip = input.auxdata.Fmax_act*aD_hip.*exoMomentArms(:,1);
+Texo_act_knee = input.auxdata.Fmax_act*aD_knee.*exoMomentArms(:,2)*input.auxdata.kneeAngleSign;
+Texo_act_ankle = input.auxdata.Fmax_act*aD_ankle.*exoMomentArms(:,3);
 
 % Calculate passive force based on normalized exo path length
 k = input.auxdata.passiveStiffness;
 positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.075) - Lexo))));
 Fexo_pass = k*(Lexo - exoSlackLength) .* positiveStiffnessAboveLslack;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,4);
-Texo_pass_knee = Fexo_pass.*exoMomentArms(:,5);
+Texo_pass_knee = Fexo_pass.*exoMomentArms(:,5)*input.auxdata.kneeAngleSign;
 Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,6);
 
 % Moments constraint

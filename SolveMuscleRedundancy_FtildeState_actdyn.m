@@ -158,6 +158,18 @@ end
 if ~isfield(Misc, 'activeDOFs') || isempty(Misc.activeDOFs)
    Misc.activeDOFs = []; 
 end
+% ExoTopology: fix moment arms to a constant value
+if ~isfield(Misc, 'fixMomentArms') || isempty(Misc.fixMomentArms)
+   Misc.fixMomentArms = []; 
+end
+% ExoTopology: option to set individual control signals for each DOF
+if ~isfield(Misc, 'mult_controls') || isempty(Misc.mult_controls)
+   Misc.mult_controls = false; 
+end
+% Quinlivan: shift exoskeleton peaks to match ID peaks
+if ~isfield(Misc, 'shift_exo_peaks') || isempty(Misc.shift_exo_peaks)
+   Misc.shift_exo_peaks = false; 
+end
 
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
@@ -174,6 +186,11 @@ end
 if ~strcmp(study{2},'Collins2015')
     errmsg = [study{2} ': spring stiffness level unused'];
     assert(Misc.ankle_clutched_spring_stiffness == -1, errmsg)
+end
+
+if ~strcmp(study{2},'Quinlivan2017')
+    errmsg = [study{2} ': shifting exoskeleton force peaks unused'];
+    assert(Misc.shift_exo_peaks == false, errmsg)
 end
 
 if ~strcmp(study{2},'Topology')
@@ -262,7 +279,9 @@ end
 fprintf('\n')
 
 % Static optimization using IPOPT solver
-DatStore = SolveStaticOptimization_IPOPT(DatStore);
+if ~strcmp(study{2},'Topology')
+    DatStore = SolveStaticOptimization_IPOPT(DatStore);
+end
 
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
@@ -322,58 +341,203 @@ model = org.opensim.modeling.Model(model_path);
 state = model.initSystem();
 model_mass = model.getTotalMass(state);
 auxdata.model_mass = model_mass;
+auxdata.numActiveDOFs = 1;
 
 if strcmp(study{2}, 'Topology')
     auxdata.hasActiveDevice = false;
     auxdata.hasPassiveDevice = false;
     
-    numExoParams = 1;
+    numExoParams = 0;
+    paramsLower = [];
+    paramsUpper = [];
     % Active device indicies
     if ~isempty(Misc.activeDOFs)
         auxdata.hasActiveDevice = true;
-        auxdata.Fmax_act = 15*auxdata.model_mass; % N/kg * kg
+        auxdata.Fmax_act = 25*auxdata.model_mass; % N/kg * kg
         auxdata.active.hip = 0;
         auxdata.active.knee = 0;
         auxdata.active.ankle = 0;
         for i = 1:length(Misc.activeDOFs)
-            switch Misc.activeDOFs{i}
+            dofInfo = split(Misc.activeDOFs{i},'/');
+            switch dofInfo{1}
                 case 'hip'
+                    numExoParams = numExoParams + 1;
                     auxdata.active.hip = numExoParams;
-                    numExoParams = numExoParams + 1;
+                    paramsLower(numExoParams) = -0.10; %#ok<*AGROW>
+                    paramsUpper(numExoParams) = 0.10;
+                    if length(dofInfo) > 1
+                        switch dofInfo{2}
+                            case 'flex'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = 0.03;
+                                    paramsUpper(numExoParams) = 0.10;
+                                end
+                            case 'ext'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = -0.10;
+                                    paramsUpper(numExoParams) = -0.03;
+                                end
+                        end
+                    end
                 case 'knee'
+                    numExoParams = numExoParams + 1;
                     auxdata.active.knee = numExoParams;
-                    numExoParams = numExoParams + 1;
+                    paramsLower(numExoParams) = -1.0;
+                    paramsUpper(numExoParams) = 1.0;
+                    if length(dofInfo) > 1
+                        switch dofInfo{2}
+                            case 'ext'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = 0.03;
+                                    paramsUpper(numExoParams) = 0.10;
+                                end
+                            case 'flex'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = -0.10;
+                                    paramsUpper(numExoParams) = -0.03;
+                                end
+                        end
+                    end
                 case 'ankle'
-                    auxdata.active.ankle = numExoParams;
                     numExoParams = numExoParams + 1;
+                    auxdata.active.ankle = numExoParams;
+                    paramsLower(numExoParams) = -0.10;
+                    paramsUpper(numExoParams) = 0.10;
+                    if length(dofInfo) > 1
+                        switch dofInfo{2}
+                            case 'dorsi'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = 0.03;
+                                    paramsUpper(numExoParams) = 0.10;
+                                end
+                            case 'plantar'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = -0.10;
+                                    paramsUpper(numExoParams) = -0.03;
+                                end
+                        end
+                    end
             end
         end
-        
+        if Misc.mult_controls
+            auxdata.numActiveDOFs = numExoParams;
+        end
     end
     % Passive device indicies
     if ~isempty(Misc.passiveDOFs)
         auxdata.hasPassiveDevice = true;
-        auxdata.passiveStiffness = 100*auxdata.model_mass; % k ~= 100 kN/m for 80kg subject (van den Bogert 2003) 
+        auxdata.passiveStiffness = 1250*auxdata.model_mass; % k ~= 100 kN/m for 80kg subject (van den Bogert 2003) 
         auxdata.passive.hip = 0;
         auxdata.passive.knee = 0;
         auxdata.passive.ankle = 0;
         for i = 1:length(Misc.passiveDOFs)
-            switch Misc.passiveDOFs{i}
+            dofInfo = split(Misc.passiveDOFs{i},'/');
+            switch dofInfo{1}
                 case 'hip'
+                    numExoParams = numExoParams + 1;
                     auxdata.passive.hip = numExoParams;
-                    numExoParams = numExoParams + 1;
+                    paramsLower(numExoParams) = -0.10;
+                    paramsUpper(numExoParams) = 0.10;
+                    if length(dofInfo) > 1
+                        switch dofInfo{2}
+                            case 'flex'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = 0.03;
+                                    paramsUpper(numExoParams) = 0.10;
+                                end
+                            case 'ext'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = -0.10;
+                                    paramsUpper(numExoParams) = -0.03;
+                                end
+                        end
+                    end
                 case 'knee'
+                    numExoParams = numExoParams + 1;
                     auxdata.passive.knee = numExoParams;
-                    numExoParams = numExoParams + 1;
+                    paramsLower(numExoParams) = -0.10;
+                    paramsUpper(numExoParams) = 0.10;
+                    if length(dofInfo) > 1
+                        switch dofInfo{2}
+                            case 'ext'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = 0.03;
+                                    paramsUpper(numExoParams) = 0.10;
+                                end
+                            case 'flex'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = -0.10;
+                                    paramsUpper(numExoParams) = -0.03;
+                                end
+                        end
+                    end
+                    
                 case 'ankle'
-                    auxdata.passive.ankle = numExoParams;
                     numExoParams = numExoParams + 1;
+                    auxdata.passive.ankle = numExoParams;
+                    paramsLower(numExoParams) = -0.10;
+                    paramsUpper(numExoParams) = 0.10;
+                    if length(dofInfo) > 1
+                        switch dofInfo{2}
+                            case 'dorsi'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = 0.03;
+                                    paramsUpper(numExoParams) = 0.10;
+                                end
+                            case 'plantar'
+                                if ~isempty(Misc.fixMomentArms)
+                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                else
+                                    paramsLower(numExoParams) = -0.10;
+                                    paramsUpper(numExoParams) = -0.03;
+                                end
+                        end
+                    end
             end
         end
         % Extra index for exotendon slack length
+        numExoParams = numExoParams + 1;
+        paramsLower(numExoParams) = 0.75;
+        paramsUpper(numExoParams) = 1.25;
         auxdata.passive.slack_length = numExoParams;
     end
     auxdata.numExoParams = numExoParams;
+    auxdata.paramsLower = paramsLower;
+    auxdata.paramsUpper = paramsUpper;
     
     auxdata.hip_DOF = strmatch('hip_flexion',DatStore.DOFNames);
     auxdata.knee_DOF = strmatch('knee_angle',DatStore.DOFNames);
@@ -393,7 +557,7 @@ if strcmp(study{2}, 'Topology')
     elseif (-10 <= knee_range_min && knee_range_min <= 0) && (knee_range_max > 100)
         auxdata.kneeAngleSign = -1;
     end
-    
+  
 end
 
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
@@ -424,6 +588,12 @@ t50 = exp(kpe .* (0.2 - 0.10e1) ./ e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
 auxdata.Fpparam = [pp1;pp2;ones(1,length(pp1))*Misc.tendonStiffnessCoeff];
 
+% Solve static optimization problem with devices for ExoTopology study to
+% improve quality of initial guesses
+if strcmp(study{2},'Topology')
+    DatStore = SolveStaticOptimization_ExoTopology(DatStore, auxdata, Misc);
+end
+
 % Problem bounds 
 a_min = 0; a_max = 1;             % bounds on muscle activation
 vA_min = -1/100; vA_max = 1/100;  % bounds on derivative of muscle activation
@@ -447,8 +617,8 @@ dFMin = dF_min*ones(1,auxdata.NMuscles);
 dFMax = dF_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); 
 aTmax = 1*ones(1,auxdata.Ndof);
-aDmin = 0; 
-aDmax = 1;
+aDmin = zeros(1, auxdata.numActiveDOFs); 
+aDmax = ones(1, auxdata.numActiveDOFs);
 switch study{2}
     case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
         control_bounds_lower = [vAmin aTmin dFMin aDmin];
@@ -531,13 +701,8 @@ switch study{2}
         bounds.parameter.lower = force_level_lower;
         bounds.parameter.upper = force_level_upper;
     case 'Topology'
-        if auxdata.hasPassiveDevice
-            bounds.parameter.lower = [-0.1*ones(1,auxdata.numExoParams-1) 0.5];
-            bounds.parameter.upper = [0.1*ones(1,auxdata.numExoParams-1) 1.5];
-        else
-            bounds.parameter.lower = -0.1*ones(1,auxdata.numExoParams);
-            bounds.parameter.upper = 0.1*ones(1,auxdata.numExoParams);
-        end
+        bounds.parameter.lower = auxdata.paramsLower;
+        bounds.parameter.upper = auxdata.paramsUpper;
 end
 
 % Path constraints
@@ -567,16 +732,21 @@ switch study{2}
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
     case 'Topology'
         if auxdata.hasActiveDevice
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
+            control_guess = [zeros(N,auxdata.NMuscles) DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles) DatStore.SO_ExoAct];
         else
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
+            control_guess = [zeros(N,auxdata.NMuscles) DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles)];
         end
     otherwise
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
 end
 guess.phase.control = control_guess;
 
-guess.phase.state =  [0.2*ones(N,auxdata.NMuscles) 0.2*ones(N,auxdata.NMuscles)];
+switch study{2}
+    case 'Topology'
+        guess.phase.state =  [DatStore.SO_MAct 0.2*ones(N,auxdata.NMuscles)];
+    otherwise
+        guess.phase.state =  [0.2*ones(N,auxdata.NMuscles) 0.2*ones(N,auxdata.NMuscles)];
+end
 guess.phase.integral = 0;
 switch study{2}
     case 'HipAnkle'
@@ -593,14 +763,17 @@ switch study{2}
         guess.parameter = 4;
     case 'Topology'
        if auxdata.hasPassiveDevice
-           guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
+%            guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
+           guess.parameter = DatStore.SO_parameter;
        else
-           guess.parameter = zeros(1,auxdata.numExoParams);
+%            guess.parameter = zeros(1,auxdata.numExoParams);
+           guess.parameter = DatStore.SO_parameter;
        end
 end
 
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
+T_exo_shift = DatStore.T_exo; % Temp variable for shifting data
 DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
 % Reproduce Quinlivan et al. 2017 study
@@ -615,7 +788,7 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
     exoAnkleNormalizedMoment = ExoCurves.am_norm;
     exoHipMomentPeaks = ExoCurves.hm_peak * model_mass;
     exoHipNormalizedMoment = ExoCurves.hm_norm;
-
+    
     % Interpolate exosuit moments to match data
     switch study{1}
         case 'SoftExosuitDesign'
@@ -646,6 +819,16 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                         DatStore.T_exo(:,dof) = -interp1(linspace(0,100,length(exoTime)), ...
                             exoAnkleNormalizedMoment, ...
                             linspace(0,100,length(DatStore.time)));
+                        
+                        if Misc.shift_exo_peaks
+                            [~,exo_idx] = max(-DatStore.T_exo(:,dof));
+                            [~,exp_idx] = max(-DatStore.T_exp(:,dof));
+                            shift_idx = abs(exp_idx - exo_idx);
+                            T_exo_shift(:,dof) = [zeros(shift_idx,1); DatStore.T_exo(1:end-shift_idx,dof)];
+                            
+                            DatStore.T_exo(:,dof) = T_exo_shift(:,dof);
+                        end
+                        
                         X = 1:4;
                         Y = exoAnkleMomentPeaks(1:4);
                         DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
@@ -669,6 +852,16 @@ if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
                         DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
                             exoHipNormalizedMoment, ...
                             linspace(0,100,length(DatStore.time)));
+                        
+                        if Misc.shift_exo_peaks 
+                            [~,exo_idx] = max(DatStore.T_exo(:,dof));
+                            [~,exp_idx] = max(DatStore.T_exp(:,dof));
+                            shift_idx = abs(exp_idx - exo_idx);
+                            T_exo_shift(:,dof) = [zeros(shift_idx,1); DatStore.T_exo(1:end-shift_idx,dof)];
+                            
+                            DatStore.T_exo(:,dof) = T_exo_shift(:,dof);
+                        end
+                        
                         X = 1:4;
                         Y = exoHipMomentPeaks(1:4);
                         DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
@@ -881,22 +1074,23 @@ if isunix
         % Now remove the lockfile
         system(sprintf('rm -f %s',pathLock));
     end
+    
 elseif ispc
     
-%     pathLock=fullfile('C:\Users\Nick\temp\lockfile', 'lockFile.txt');
-%     
-%     % If lock file exists, wait until it is deleted by a parallel process
-%     while true
-%         pause(5) % wait 5 seconds
-%         if ~(exist(pathLock,'file')==2)
-%            break 
-%         end
-%         pause(5) % wait 5 seconds
-%     end
-%     
-%     % Create a new lock file for this process
-%     fid = fopen(pathLock,'wt');
-%     fclose(fid);
+    lockDir = 'C:\Users\Nick\tmp\adigatorLock\';
+    pathLock=fullfile(lockDir, 'lockFile.mat');
+    
+    % If lock file exists, wait until it is deleted by a parallel process
+    while true
+        pause(randi(5,1)) % wait 5 seconds
+        if ~(exist(pathLock,'file')==2)
+           break 
+        end
+    end
+    
+    % Create a new lock file for this process
+    emptyVar = [];
+    save(pathLock, 'emptyVar')
     
     % Perform serialzied task
     tdummy = guess.phase.time;
@@ -910,8 +1104,8 @@ elseif ispc
     setup.auxdata.splinestruct = splinestructad;
     adigatorGenFiles4gpops2(setup)
 
-%     % Remove the lockfile
-%     system(sprintf('del %s',pathLock))
+    % Remove the lockfile
+    system(sprintf('del %s',pathLock))
 
 else
     error('Platform unknown.')
@@ -971,11 +1165,11 @@ end
     auxdata.params, LMT, VMT, auxdata.Fpparam);
 
 if strcmp(study{1},'ISB2017')
-    if strcmp(study{2},'Quinlivan2017') && strcmp(Misc.costfun, 'Exc_Act')
-        DatStore.ExoTorques = calcExoTorques_lMtildeISBQuinlivan2017_Exc_Act(...
+    if strcmp(study{2},'Quinlivan2017')
+        DatStore.ExoTorques_Act = calcExoTorques_FtildeISBQuinlivan2017(...
             OptInfo, DatStore);
-    elseif strcmp(study{2},'Collins2015') && strcmp(Misc.costfun, 'Exc_Act')
-        DatStore.ExoTorques = calcExoTorques_lMtildeISBCollins2015_Exc_Act(...
+    elseif strcmp(study{2},'Collins2015')
+        DatStore.ExoTorques_Act = calcExoTorques_FtildeISBCollins2015(...
             OptInfo, DatStore);
     end
 end

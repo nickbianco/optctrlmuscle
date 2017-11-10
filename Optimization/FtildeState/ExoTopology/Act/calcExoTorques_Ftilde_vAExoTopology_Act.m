@@ -6,26 +6,44 @@ auxdata = OptInfo.result.setup.auxdata;
 Ndof = auxdata.Ndof;
 
 % Get device control
-aD = OptInfo.result.solution.phase.control(:,end);
+aD = OptInfo.result.solution.phase.control(:,end-(auxdata.numActiveDOFs-1):end);
 
 % Get moment arms
 parameter = OptInfo.result.solution.parameter;
 exoMomentArms = zeros(numColPoints,3);
+aD_hip = zeros(numColPoints,1);
+aD_knee = zeros(numColPoints,1);
+aD_ankle = zeros(numColPoints,1);
 if auxdata.active.hip
     exoMomentArms(:,1) = parameter(:,auxdata.active.hip);
+    if auxdata.numActiveDOFs > 1
+        aD_hip = aD(:,auxdata.active.hip);
+    else
+        aD_hip = aD;
+    end
 end
 if auxdata.active.knee
     exoMomentArms(:,2) = parameter(:,auxdata.active.knee);
+    if auxdata.numActiveDOFs > 1
+        aD_knee = aD(:,auxdata.active.knee);
+    else
+        aD_knee = aD;
+    end
 end
 if auxdata.active.ankle
     exoMomentArms(:,3) = parameter(:,auxdata.active.ankle);
+    if auxdata.numActiveDOFs > 1
+        aD_ankle = aD(:,auxdata.active.ankle);
+    else
+        aD_ankle = aD;
+    end
 end
 MomentArms_Act = exoMomentArms(1,:);
 
 % Exosuit torques
-Texo_act_hip = auxdata.Fmax_act*aD.*exoMomentArms(:,1);
-Texo_act_knee = auxdata.Fmax_act*aD.*exoMomentArms(:,2);
-Texo_act_ankle = auxdata.Fmax_act*aD.*exoMomentArms(:,3);
+Texo_act_hip = auxdata.Fmax_act*aD_hip.*exoMomentArms(:,1);
+Texo_act_knee = auxdata.Fmax_act*aD_knee.*exoMomentArms(:,2)*auxdata.kneeAngleSign;
+Texo_act_ankle = auxdata.Fmax_act*aD_ankle.*exoMomentArms(:,3);
 
 ExoTorques_Act = zeros(length(time), Ndof);
 for dof = 1:Ndof

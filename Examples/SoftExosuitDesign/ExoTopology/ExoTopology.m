@@ -13,25 +13,28 @@ end
 Datapath = fullfile(getenv('OPENSIM_HOME'), 'Models', 'Gait10dof18musc', ...
     'OutputReference');
 IK_path=fullfile(Datapath,'IK','subject01_walk_IK.mot');
-ID_path=fullfile(Datapath,'ID','inversedynamics.sto');
+ID_path=fullfile(Datapath,'ID', 'Results', 'subject01_walk_ID.sto');
 %ID_path=[]; % compute ID from the external loads
 model_path=fullfile(Datapath,'subject01.osim');
 time=[0.7 1.4];     % Part of the right stance phase
 OutPath=fullfile(DirCurrent,'Results');
 
 Misc.DofNames_Input={'hip_flexion_r','knee_angle_r','ankle_angle_r'};
-Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
+% Misc.Loads_path=fullfile(Datapath,'ExperimentalData','subject01_walk_grf.xml');
 
 % Optional Input Arguments
 Misc.costfun = 'Default';
 Misc.study = 'SoftExosuitDesign/Topology';
-Misc.activeDOFs = {'hip','knee','ankle'};
-Misc.passiveDOFs = {'hip','knee','ankle'};
+Misc.activeDOFs = {'hip/flex', 'ankle/plantar'};
+Misc.mult_controls = true;
+Misc.passiveDOFs = {};
+Misc.fixMomentArms = 0.05;
 
 tag = '';
+Misc.subcase = '';
 if ~isempty(Misc.activeDOFs)
-    Misc.costfun = [Misc.costfun 'Act'];
     active_tag = 'act';
+    Misc.subcase = 'Act';
     for i = 1:length(Misc.activeDOFs)
         switch Misc.activeDOFs{i}
             case 'hip'
@@ -46,8 +49,8 @@ if ~isempty(Misc.activeDOFs)
 end
 
 if ~isempty(Misc.passiveDOFs)
-    Misc.costfun = [Misc.costfun 'Pass'];
     passive_tag = 'pass';
+    Misc.subcase = [Misc.subcase 'Pass'];
     for i = 1:length(Misc.passiveDOFs)
         switch Misc.passiveDOFs{i}
             case 'hip'

@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Act(input)
+function phaseout = continous_SO_ExoTopology_Act(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -10,14 +10,12 @@ splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
 
 % Get controls
-vA      = 100*input.phase.control(:,1:NMuscles);
-aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
-dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD      = input.phase.control(:,end-(input.auxdata.numActiveDOFs-1):end);
+e  = input.phase.control(:,1:NMuscles);
+aT = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
+aD = input.phase.control(:,end-(input.auxdata.numActiveDOFs-1):end);
 
 % Get states
-a      = input.phase.state(:,1:NMuscles);
-Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
+a = input.phase.state;
 
 % Get moment arms and DOF controls
 exoMomentArms = zeros(numColPoints,3);
@@ -50,17 +48,19 @@ if input.auxdata.active.ankle
 end
 
 % PATH CONSTRAINTS
-% Activation dynamics - De Groote et al. (2009)
-act1 = vA + a./(ones(size(a,1),1)*tauDeact);
-act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
-% Hill-equilibrium constraint
-[Hilldiff,F,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
-
+% Get muscle forces
+[F, ~, ~, ~, ~, ~] = HillModel_RigidTendon(e, splinestruct.LMT, ... 
+                                              splinestruct.VMT, ... 
+                                              params, ... 
+                                              input.auxdata.Fvparam, ...
+                                              input.auxdata.Fpparam, ...
+                                              input.auxdata.Faparam);
 % Exosuit torques
-Texo_act_hip = input.auxdata.Fmax_act.*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Fmax_act.*aD_knee.*exoMomentArms(:,2).*input.auxdata.kneeAngleSign;
-Texo_act_ankle = input.auxdata.Fmax_act.*aD_ankle.*exoMomentArms(:,3);
+% Active device
+Texo_act_hip = input.auxdata.Fmax_act*aD_hip.*exoMomentArms(:,1);
+Texo_act_knee = input.auxdata.Fmax_act*aD_knee.*exoMomentArms(:,2);
+Texo_act_ankle = input.auxdata.Fmax_act*aD_ankle.*exoMomentArms(:,3);
 
 % Moments constraint
 Topt = 150;
@@ -83,16 +83,16 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff Hilldiff act1 act2];
+phaseout.path = Tdiff;
 
 % DYNAMIC CONSTRAINTS
-% Activation dynamics is implicit
-% Contraction dynamics is implicit
-phaseout.dynamics = [vA dFtilde];
+% Solve activation dynamics for one muscle so GPOPS is happy
+dadt = ActivationDynamics(e(:,1),a,tauAct(1),tauDeact(1),input.auxdata.b);
+
+phaseout.dynamics = dadt;
 
 % OBJECTIVE FUNCTION
 w1 = 1000;
-w2 = 0.01;
-phaseout.integrand = sum(a.^2,2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
+phaseout.integrand = sum(e.^2,2)+ w1.*sum(aT.^2,2);
 
 

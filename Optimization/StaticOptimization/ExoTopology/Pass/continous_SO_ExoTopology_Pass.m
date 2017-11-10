@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_MinAlex_Pass(input)
+function phaseout = continous_SO_ExoTopology_Pass(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -10,13 +10,11 @@ splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
 
 % Get controls
-vA   = 100*input.phase.control(:,1:NMuscles);
-aT  = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
-dFtilde  = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
+e  = input.phase.control(:,1:NMuscles);
+aT = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 
 % Get states
-a       = input.phase.state(:,1:NMuscles);
-Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
+a = input.phase.state;
 
 % Get moment arms
 exoMomentArms = zeros(numColPoints,3);
@@ -24,7 +22,7 @@ if input.auxdata.passive.hip
     exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.passive.hip);
 end
 if input.auxdata.passive.knee
-    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.passive.knee)*input.auxdata.kneeAngleSign;
+    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.passive.knee);
 end
 if input.auxdata.passive.ankle
     exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.passive.ankle);
@@ -34,7 +32,7 @@ end
 exoSlackLength = input.phase.parameter(:,end);
 
 % Exosuit path length
-Lexo = zeros(numColPoints,1);
+Lexo = ones(numColPoints,1);
 splinestruct.IK(:,input.auxdata.knee_DOF) = input.auxdata.kneeAngleSign*splinestruct.IK(:,input.auxdata.knee_DOF);
 for dof = 1:Ndof
     if input.auxdata.passive.hip && (dof==input.auxdata.hip_DOF)
@@ -49,12 +47,14 @@ for dof = 1:Ndof
 end
 
 % PATH CONSTRAINTS
-% Activation dynamics - De Groote et al. (2009)
-act1 = vA + a./(ones(size(a,1),1)*tauDeact);
-act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
-% Hill-equilibrium constraint
-[Hilldiff,F,~,~,vMtilde] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+% Get muscle forces
+[F, ~, ~, ~, ~, ~] = HillModel_RigidTendon(e, splinestruct.LMT, ... 
+                                              splinestruct.VMT, ... 
+                                              params, ... 
+                                              input.auxdata.Fvparam, ...
+                                              input.auxdata.Fpparam, ...
+                                              input.auxdata.Faparam);
 
 % Exosuit torques
 % Calculate passive force based on normalized exo path length
@@ -86,25 +86,16 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff Hilldiff act1 act2];
+phaseout.path = Tdiff;
 
 % DYNAMIC CONSTRAINTS
-% Activation dynamics is implicit
-% Contraction dynamics is implicit
-phaseout.dynamics = [vA dFtilde];
+% Solve activation dynamics for one muscle so GPOPS is happy
+dadt = ActivationDynamics(e(:,1),a,tauAct(1),tauDeact(1),input.auxdata.b);
+
+phaseout.dynamics = dadt;
 
 % OBJECTIVE FUNCTION
-% Calculate metabolic rate from Minetti & Alexander (1997) model
-vmax = params(5,:);  
-Fo = params(1,:);   
-Edot = zeros(numColPoints,NMuscles);
-for m = 1:NMuscles
-    v = vmax(1,m)*vMtilde(:,m);
-    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
-end
-
-w1 = 10000;
-w2 = 0.01;
-phaseout.integrand = sum(Edot,2)+ w1*sum(aT.^2,2) + w2*sum((vA/100).^2,2);
+w1 = 1000;
+phaseout.integrand = sum(a.^2,2)+ w1*sum(aT.^2,2);
 
 

@@ -43,7 +43,7 @@ k = auxdata.passiveStiffness;
 positiveStiffnessAboveLslack = (1 ./ (1 + exp(100 * ((exoSlackLength+0.075) - Lexo))));
 Fexo_pass = k*(Lexo - exoSlackLength) .* positiveStiffnessAboveLslack;
 Texo_pass_hip = Fexo_pass.*exoMomentArms(:,1);
-Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2);
+Texo_pass_knee = Fexo_pass.*exoMomentArms(:,2)*auxdata.kneeAngleSign;
 Texo_pass_ankle = Fexo_pass.*exoMomentArms(:,3);
 
 ExoTorques_Pass = zeros(length(time), Ndof);

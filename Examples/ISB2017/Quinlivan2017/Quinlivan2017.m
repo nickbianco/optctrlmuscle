@@ -35,7 +35,7 @@ Misc.model_mass = 75.1646; % kg (Gait2354 mass)
 %% Solve the problem
 
 % Device optimization condition
-[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc);
 ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
 filename = 'Quinlivan2017_MRS_solution_opt.mat';
 savepath=fullfile(DirCurrent,filename);
@@ -43,30 +43,30 @@ save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ..
         'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
 
 % No device condition
-Misc.exo_force_level = 0;
-[Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
-filename=strcat('Quinlivan2017_MRS_solution_force_level_',int2str(Misc.exo_force_level),'.mat');
-savepath=fullfile(DirCurrent,filename);
-save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
-        'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
-       
-% keyboard
-
-for i = 1:4
-    % Device force level
-    % 1 --> MIN
-    % 2 --> MED
-    % 3 --> HIGH
-    % 4 --> MAX
-    Misc.exo_force_level = i;
-    [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
-    ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
-    filename=strcat('Quinlivan2017_MRS_solution_force_level_',int2str(Misc.exo_force_level),'.mat');
-    savepath=fullfile(DirCurrent,filename);
-    save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
-            'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
-end
+% Misc.exo_force_level = 0;
+% [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+% ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
+% filename=strcat('Quinlivan2017_MRS_solution_force_level_',int2str(Misc.exo_force_level),'.mat');
+% savepath=fullfile(DirCurrent,filename);
+% save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
+%         'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
+%        
+% % keyboard
+% 
+% for i = 1:4
+%     % Device force level
+%     % 1 --> MIN
+%     % 2 --> MED
+%     % 3 --> HIGH
+%     % 4 --> MAX
+%     Misc.exo_force_level = i;
+%     [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_lMtildeState(model_path,IK_path,ID_path,time,OutPath,Misc);
+%     ExoTorques = getExoTorques(OptInfo,DatStore,Misc);
+%     filename=strcat('Quinlivan2017_MRS_solution_force_level_',int2str(Misc.exo_force_level),'.mat');
+%     savepath=fullfile(DirCurrent,filename);
+%     save(savepath,'Time','MExcitation','MActivation','RActivation','TForcetilde', ...
+%             'TForce','lMtilde','lM','MuscleNames','OptInfo','DatStore','ExoTorques');
+% end
 
 end
 
