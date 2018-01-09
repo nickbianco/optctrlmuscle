@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Act(input)
+function phaseout = continous_Ftilde_vAExoTopology_Met_Act(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -6,6 +6,7 @@ Ndof            = input.auxdata.Ndof;
 tauAct          = input.auxdata.tauAct;
 tauDeact        = input.auxdata.tauDeact;
 params          = input.auxdata.params;
+metabolicParams = input.auxdata.metabolicParams;
 splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
 
@@ -55,7 +56,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,~,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff,F,Fce,Fiso,vMtilde,lMtilde] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
 Texo_act_hip = input.auxdata.Fmax_act.*aD_hip.*exoMomentArms(:,1);
@@ -91,8 +92,21 @@ phaseout.path = [Tdiff Hilldiff act1 act2];
 phaseout.dynamics = [vA dFtilde];
 
 % OBJECTIVE FUNCTION
+Edot = zeros(numColPoints, NMuscles);
+for m = 1:NMuscles
+    Lce = lMtilde(:,m)*params(2,m);
+    Vce = vMtilde(:,m)*params(5,m);
+    u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact, tauAct);
+    paramStruct = struct('rFT', metabolicParams(1,m), ...
+                         'Lceopt', metabolicParams(2,m), ...
+                         'VceMax_LceoptsPerSecond', metabolicParams(3,m), ...
+                         'muscleMass', metabolicParams(4,m), ...
+                         'scalingFactorS', metabolicParams(5,m));
+    Edot(:,m) = calcUmbergerCost2010Smooth(Lce, Vce, Fce, Fiso, u, a(:,m), paramStruct);
+end
+
 w1 = 1000;
 w2 = 0.01;
-phaseout.integrand = sum(a.^2,2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
+phaseout.integrand = sum(Edot, 2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
 
 

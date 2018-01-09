@@ -251,7 +251,7 @@ end
 % The solution of the static optimization is used as initial guess for the
 % dynamic optimization
 % Extract the muscle-tendon properties
-[DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+[DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle,DatStore.metabolicParams]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
 
 % Modify tendon stiffnesses
 fprintf('Muscles with modified tendon stiffness: \n')
@@ -296,6 +296,7 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 % DatStore.time = DatStore.time;          % time window
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
+auxdata.metabolicParams = DatStore.params; % Parameters for calculating metabolic cost
 
 % Collins et al. 2015 study, optimizing for spring stiffness
 if strcmp(study{2}, 'Collins2015')
@@ -347,6 +348,9 @@ if strcmp(study{2}, 'Topology')
     auxdata.hasActiveDevice = false;
     auxdata.hasPassiveDevice = false;
     
+    smallMomentArm = 0.03;
+    largeMomentArm = 0.10;
+    
     numExoParams = 0;
     paramsLower = [];
     paramsUpper = [];
@@ -372,16 +376,16 @@ if strcmp(study{2}, 'Topology')
                                     paramsLower(numExoParams) = Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = 0.03;
-                                    paramsUpper(numExoParams) = 0.10;
+                                    paramsLower(numExoParams) = smallMomentArm;
+                                    paramsUpper(numExoParams) = largeMomentArm;
                                 end
                             case 'ext'
                                 if ~isempty(Misc.fixMomentArms)
                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = -0.10;
-                                    paramsUpper(numExoParams) = -0.03;
+                                    paramsLower(numExoParams) = -largeMomentArm;
+                                    paramsUpper(numExoParams) = -smallMomentArm;
                                 end
                         end
                     end
@@ -397,16 +401,16 @@ if strcmp(study{2}, 'Topology')
                                     paramsLower(numExoParams) = Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = 0.03;
-                                    paramsUpper(numExoParams) = 0.10;
+                                    paramsLower(numExoParams) = smallMomentArm;
+                                    paramsUpper(numExoParams) = largeMomentArm;
                                 end
                             case 'flex'
                                 if ~isempty(Misc.fixMomentArms)
                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = -0.10;
-                                    paramsUpper(numExoParams) = -0.03;
+                                    paramsLower(numExoParams) = -largeMomentArm;
+                                    paramsUpper(numExoParams) = -smallMomentArm;
                                 end
                         end
                     end
@@ -422,16 +426,16 @@ if strcmp(study{2}, 'Topology')
                                     paramsLower(numExoParams) = Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = 0.03;
-                                    paramsUpper(numExoParams) = 0.10;
+                                    paramsLower(numExoParams) = smallMomentArm;
+                                    paramsUpper(numExoParams) = largeMomentArm;
                                 end
                             case 'plantar'
                                 if ~isempty(Misc.fixMomentArms)
                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = -0.10;
-                                    paramsUpper(numExoParams) = -0.03;
+                                    paramsLower(numExoParams) = -largeMomentArm;
+                                    paramsUpper(numExoParams) = -smallMomentArm;
                                 end
                         end
                     end
@@ -463,16 +467,16 @@ if strcmp(study{2}, 'Topology')
                                     paramsLower(numExoParams) = Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = 0.03;
-                                    paramsUpper(numExoParams) = 0.10;
+                                    paramsLower(numExoParams) = smallMomentArm;
+                                    paramsUpper(numExoParams) = largeMomentArm;
                                 end
                             case 'ext'
                                 if ~isempty(Misc.fixMomentArms)
                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = -0.10;
-                                    paramsUpper(numExoParams) = -0.03;
+                                    paramsLower(numExoParams) = -largeMomentArm;
+                                    paramsUpper(numExoParams) = -smallMomentArm;
                                 end
                         end
                     end
@@ -488,16 +492,16 @@ if strcmp(study{2}, 'Topology')
                                     paramsLower(numExoParams) = Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = 0.03;
-                                    paramsUpper(numExoParams) = 0.10;
+                                    paramsLower(numExoParams) = smallMomentArm;
+                                    paramsUpper(numExoParams) = largeMomentArm;
                                 end
                             case 'flex'
                                 if ~isempty(Misc.fixMomentArms)
                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = -0.10;
-                                    paramsUpper(numExoParams) = -0.03;
+                                    paramsLower(numExoParams) = -largeMomentArm;
+                                    paramsUpper(numExoParams) = -smallMomentArm;
                                 end
                         end
                     end
@@ -514,16 +518,16 @@ if strcmp(study{2}, 'Topology')
                                     paramsLower(numExoParams) = Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = 0.03;
-                                    paramsUpper(numExoParams) = 0.10;
+                                    paramsLower(numExoParams) = smallMomentArm;
+                                    paramsUpper(numExoParams) = largeMomentArm;
                                 end
                             case 'plantar'
                                 if ~isempty(Misc.fixMomentArms)
                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
                                 else
-                                    paramsLower(numExoParams) = -0.10;
-                                    paramsUpper(numExoParams) = -0.03;
+                                    paramsLower(numExoParams) = -largeMomentArm;
+                                    paramsUpper(numExoParams) = -smallMomentArm;
                                 end
                         end
                     end

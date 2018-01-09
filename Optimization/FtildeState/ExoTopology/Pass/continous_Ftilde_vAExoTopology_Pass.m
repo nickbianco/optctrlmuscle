@@ -54,7 +54,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff,F,~,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
 % Calculate passive force based on normalized exo path length
