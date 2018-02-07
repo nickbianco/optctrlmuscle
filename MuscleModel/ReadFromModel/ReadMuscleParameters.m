@@ -35,10 +35,10 @@ for i = 1:nom
    % max contractile velocity (Lceopt/s)
    metabolicParams(3,i) = muscle.getMaxContractionVelocity();
    % muscle mass
-   sigma = probeUmberger.getSpecificTension(names{m}); % Specific tension [N/m^2]
-   PCSA = Fmax/sigma;      % Physiological cross sectional area [m^2]
+   sigma = probeUmberger.getSpecificTension(names{i}); % Specific tension [N/m^2]
+   PCSA = params(1,i)/sigma;      % Physiological cross sectional area [m^2]
    rho = 1059.7; % Muscle density [kg/m^3]
-   mass = PCSA*rho*Lceopt; % Muscle mass [kg]
+   mass = PCSA*rho*params(2,i); % Muscle mass [kg]
    metabolicParams(4,i) = mass;
    % aerobic vs. anaerobic scaling factor
    metabolicParams(5,i) = 1.0;

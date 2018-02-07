@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vA_MinAlex(input)
+function phaseout = continous_Ftilde_vA_Met(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -6,6 +6,7 @@ Ndof            = input.auxdata.Ndof;
 tauAct          = input.auxdata.tauAct;
 tauDeact        = input.auxdata.tauDeact;
 params          = input.auxdata.params;
+metabolicParams = input.auxdata.metabolicParams;
 splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
 
@@ -24,7 +25,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,~,~,vMtilde,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+[Hilldiff,F,Fce,Fiso,vMtilde,lMtilde] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
@@ -44,20 +45,23 @@ phaseout.path = [Tdiff Hilldiff act1 act2];
 phaseout.dynamics = [vA dFtilde];
 
 % OBJECTIVE FUNCTION
-% Calculate metabolic rate from Minetti & Alexander (1997) model
-vmax = params(5,:);  
-Fo = params(1,:);   
-Edot = zeros(numColPoints,NMuscles);
+Edot = zeros(numColPoints, NMuscles);
 for m = 1:NMuscles
-    v = vmax(1,m)*vMtilde(:,m);
-    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
+    Lce = lMtilde(:,m)*params(2,m);
+    Vce = vMtilde(:,m)*params(5,m);
+    u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
+    paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
+                   metabolicParams(3,m), metabolicParams(4,m), ...
+                   metabolicParams(5,m)];
+    Edot(:,m) = calcUmbergerCost2010(Lce, Vce, Fce(:,m), Fiso(:,m), u, a(:,m), paramStruct);
 end
 
-w1 = 1000;
-w2 = 0.01;
-wEdot = 1/(75*9.81*1.2);
-phaseout.integrand = wEdot*sum(Edot,2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
-
+w_aT = 1000;
+w_a = 0.05;
+w_vA = 0.05;
+w_Edot = 1/(input.auxdata.model_mass*9.81*1.25);
+phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2)+ w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
+ 
 
 
 

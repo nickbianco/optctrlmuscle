@@ -96,17 +96,17 @@ Edot = zeros(numColPoints, NMuscles);
 for m = 1:NMuscles
     Lce = lMtilde(:,m)*params(2,m);
     Vce = vMtilde(:,m)*params(5,m);
-    u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact, tauAct);
-    paramStruct = struct('rFT', metabolicParams(1,m), ...
-                         'Lceopt', metabolicParams(2,m), ...
-                         'VceMax_LceoptsPerSecond', metabolicParams(3,m), ...
-                         'muscleMass', metabolicParams(4,m), ...
-                         'scalingFactorS', metabolicParams(5,m));
-    Edot(:,m) = calcUmbergerCost2010Smooth(Lce, Vce, Fce, Fiso, u, a(:,m), paramStruct);
+    u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
+    paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
+                   metabolicParams(3,m), metabolicParams(4,m), ...
+                   metabolicParams(5,m)];
+    Edot(:,m) = calcUmbergerCost2010(Lce, Vce, Fce(:,m), Fiso(:,m), u, a(:,m), paramStruct);
 end
 
-w1 = 1000;
-w2 = 0.01;
-phaseout.integrand = sum(Edot, 2)+ w1.*sum(aT.^2,2)+ w2*sum((vA/100).^2,2);
+w_aT = 1000;
+w_a = 0.05;
+w_vA = 0.05;
+w_Edot = 1/(input.auxdata.model_mass*9.81*1.25);
+phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2)+ w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
 
 

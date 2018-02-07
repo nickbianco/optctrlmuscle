@@ -296,7 +296,7 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 % DatStore.time = DatStore.time;          % time window
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
-auxdata.metabolicParams = DatStore.params; % Parameters for calculating metabolic cost
+auxdata.metabolicParams = DatStore.metabolicParams; % Parameters for calculating metabolic cost
 
 % Collins et al. 2015 study, optimizing for spring stiffness
 if strcmp(study{2}, 'Collins2015')
@@ -995,7 +995,7 @@ if strcmp(study{2},'HipAnkleMass')
     if Misc.exo_force_level    
         exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
         exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
-        for dof = 1:auxdata.Ndof
+        for dof = 1:auxdata.Ndofdoit
             if strfind(DatStore.DOFNames{dof},'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
                 DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time); 
@@ -1031,13 +1031,13 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.derivatives.derivativelevel = 'second';
-setup.nlp.ipoptoptions.tolerance = 1e-6;
+setup.derivatives.derivativelevel = 'first';
+setup.nlp.ipoptoptions.tolerance = 10^(-4);
 setup.nlp.ipoptoptions.maxiterations = 10000;
-setup.derivatives.supplier = 'adigator';
+setup.derivatives.supplier = 'sparseCD';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-3;
+setup.mesh.tolerance = 1e-4;
 setup.mesh.maxiterations = 20;
 setup.mesh.colpointsmin = 5;
 setup.mesh.colpointsmax = 10;
@@ -1073,7 +1073,9 @@ if isunix
             splinestruct.(splinenames{Scount}) = zeros(0,secdim);
         end
         setup.auxdata.splinestruct = splinestructad;
-        adigatorGenFiles4gpops2(setup)
+        if strcmp(setup.derivatives.supplier, 'adigator')
+        	adigatorGenFiles4gpops2(setup)
+        end
         
         % Now remove the lockfile
         system(sprintf('rm -f %s',pathLock));
@@ -1106,7 +1108,9 @@ elseif ispc
         splinestruct.(splinenames{Scount}) = zeros(0,secdim);
     end
     setup.auxdata.splinestruct = splinestructad;
-    adigatorGenFiles4gpops2(setup)
+    if strcmp(setup.derivatives.supplier, 'adigator')
+        adigatorGenFiles4gpops2(setup)
+    end
 
     % Remove the lockfile
     system(sprintf('del %s',pathLock))

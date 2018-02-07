@@ -35,41 +35,43 @@ function heatRates = calcUmbergerCost2010Smooth(Lce,Vce,F,Fiso,u,a, params)
 %-------------------------------------------------------------------------------
 
 %% Activation and maintenance heat rate.
-hdotAM = 128*params.rFT + 25;
-hdotActivation = hdotAM*0.4;
-hdotMaintenance = hdotAM*0.6;
-
-%% Shortening and lengthening heat rate (shortening is negative).
-VtildeCE = Vce/params.Lceopt;
-VtildeCEmax = params.VceMax_LceoptsPerSecond;
-VtildeCEmax_FT = VtildeCEmax;
-
-% TODO: how to handle cases where rFT ~= 0.05?
-fiberRatioFactor = logisticFuncLessThan(params.rFT, 0.05) + ...
-                 0.4 * logisticFuncGreaterThan(params.rFT, 0.05);
-VtildeCEmax_ST = VtildeCEmax * fiberRatioFactor;
-
-
-alphaS_ST = (4*25) / VtildeCEmax_ST;
-alphaS_FT = (1*153) / VtildeCEmax_FT;
-
-% Shortening. ST fibers continue to liberate energy at their maximum rate if
-% the whole muscle shortens faster than the maximum velocity of ST fibers.
-% Note: "the first term on the right-hand side of Eq. (11)" is not a precise
-% statement. This calculation was clarified with Brian Umberger over email.
-STterm = min(-alphaS_ST*VtildeCE, alphaS_ST*VtildeCEmax_ST);
-hdotShorten = STterm*(1-params.rFT) - alphaS_FT*VtildeCE*params.rFT;
-
-% Lengthening.
-alphaL = 0.3*alphaS_ST;
-hdotLengthen = alphaL*VtildeCE;
-
-hdotShortenLengthen = hdotShorten * logisticFuncLessThan(VtildeCE, 0) + ...
-                      hdotLengthen * logisticFuncGreaterThan(VtildeCE, 0);
-
+hdotAM = 128.*params(1) + 25;
+hdotActivation = hdotAM.*0.4;
+% hdotMaintenance = hdotAM.*0.6;
+% 
+% %% Shortening and lengthening heat rate (shortening is negative).
+% VtildeCE = Vce./params(2); % vector
+% VtildeCEmax = params(3);
+% VtildeCEmax_FT = VtildeCEmax;
+% 
+% % TODO: how to handle cases where rFT ~= 0.05?
+% fiberRatioFactorLessThan = logisticFuncLessThan(ones(size(VtildeCE))*params(1), ones(size(VtildeCE))*0.05);
+% fiberRatioFactorGreaterThan = logisticFuncGreaterThan(ones(size(VtildeCE))*params(1), ones(size(VtildeCE))*0.05);
+% fiberRatioFactor = fiberRatioFactorLessThan + fiberRatioFactorGreaterThan;
+% 
+% % fiberRatioFactor = ones(size(VtildeCE))*params(1);
+% VtildeCEmax_ST = VtildeCEmax .* fiberRatioFactor;
+% 
+% alphaS_ST = (4*25) ./ VtildeCEmax_ST;
+% alphaS_FT = (1*153) ./ VtildeCEmax_FT;
+% 
+% % Shortening. ST fibers continue to liberate energy at their maximum rate if
+% % the whole muscle shortens faster than the maximum velocity of ST fibers.
+% % Note: "the first term on the right-hand side of Eq. (11)" is not a precise
+% % statement. This calculation was clarified with Brian Umberger over email.
+% STterm = min(-alphaS_ST.*VtildeCE, alphaS_ST.*VtildeCEmax_ST.*ones(size(VtildeCE))); 
+% hdotShorten = STterm.*(1-params(1)) - alphaS_FT.*VtildeCE.*params(1);
+% 
+% % Lengthening.
+% alphaL = 0.3.*alphaS_ST;
+% hdotLengthen = alphaL.*VtildeCE;
+% 
+% hdotShortenLengthenLessThan = hdotShorten .* logisticFuncLessThan(VtildeCE, zeros(size(VtildeCE)));
+% hdotShortenLengthenGreaterThan = hdotLengthen .* logisticFuncGreaterThan(VtildeCE, zeros(size(VtildeCE)));
+% hdotShortenLengthen = hdotShortenLengthenLessThan + hdotShortenLengthenGreaterThan;
 
 %% Mechanical work rate (wdot>0 when shortening).
-wdot = max(-F*Vce/params.muscleMass, 0);
+wdot = max((-F .* Vce) ./ params(4), zeros(size(F)));
 
 %% Scaling.
 % Account for effect of length and activation on hdotAM and hdotSL,
@@ -77,45 +79,51 @@ wdot = max(-F*Vce/params.muscleMass, 0);
 %(aerobic vs.anaerobic).
 
 % --> length dependence
-lengthDependenceFactor = logisticFuncLessThan(Lce, params.Lceopt) + ...
-                         Fiso * logisticFuncGreaterThan(Lce, params.Lceopt);
-hdotMaintenance = lengthDependenceFactor*hdotMaintenance;
-hdotShortenLengthen = lengthDependenceFactor*hdotShortenLengthen;
+% lengthDependenceFactorLessThan = logisticFuncLessThan(Lce, ones(size(Lce))*params(2));
+% lengthDependenceFactorGreaterThan = Fiso .* logisticFuncGreaterThan(Lce, ones(size(Lce))*params(2));
+% lengthDependenceFactor = lengthDependenceFactorLessThan + lengthDependenceFactorGreaterThan;
+% hdotMaintenance = lengthDependenceFactor .* hdotMaintenance;
+% hdotShortenLengthen = lengthDependenceFactor .* hdotShortenLengthen;
 
 
 % --> submaximal activation: rapid rise (slow decay) of heat production at
 %                            beginning (end) of excitation
-scalingFactorA = ((u+a)/2) * logisticFuncLessThan(u, a) + ...
-                 u * logisticFuncGreaterThan(u, a);
-scalingFactorA_AM = scalingFactorA^0.6;
-scalingFactorA_S = scalingFactorA^2.0;
+scalingFactorALessThan = ((u+a)./2) .* logisticFuncLessThan(u, a);
+scalingFactorAGreaterThan = u .* logisticFuncGreaterThan(u, a);
+scalingFactorA = scalingFactorALessThan + scalingFactorAGreaterThan;
+scalingFactorA_AM = scalingFactorA.^0.6;
+% scalingFactorA_S = scalingFactorA.^2.0;
 
-actHdotFactor = scalingFactorA_S * logisticFuncLessThan(VtildeCE, 0) + ...
-                scalingFactorA * logisticFuncGreaterThan(VtildeCE, 0);
-hdotShortenLengthen = hdotShortenLengthen * actHdotFactor;
-hdotActivation = hdotActivation * scalingFactorA_AM;
-hdotMaintenance = hdotMaintenance * scalingFactorA_AM;
+% actHdotFactorLessThan = scalingFactorA_S .* logisticFuncLessThan(VtildeCE, zeros(size(VtildeCE)));
+% actHdotFactorGreaterThan = scalingFactorA .* logisticFuncGreaterThan(VtildeCE, zeros(size(VtildeCE)));
+% actHdotFactor = actHdotFactorLessThan + actHdotFactorGreaterThan;
+% hdotShortenLengthen = hdotShortenLengthen .* actHdotFactor;
+hdotActivation = hdotActivation .* scalingFactorA_AM;
+% hdotMaintenance = hdotMaintenance .* scalingFactorA_AM;
 
 % --> aerobic vs. anaerobic
-hdotActivation = hdotActivation * params.scalingFactorS;
-hdotMaintenance = hdotMaintenance * params.scalingFactorS;
-hdotShortenLengthen = hdotShortenLengthen * params.scalingFactorS;
+hdotActivation = hdotActivation .* params(5);
+% % hdotMaintenance = hdotMaintenance .* params(5);
+% hdotShortenLengthen = hdotShortenLengthen .* params(5);
 
 % Total heat rate cannot fall below 1.0 W/kg.
-totalHeat = hdotActivation + hdotMaintenance + hdotShortenLengthen;
-hdotOverride = 1.0 - hdotMaintenance - hdotShortenLengthen;
-hdotActivation = hdotOverride * logisticFuncLessThan(totalHeat, 1.0) + ...
-                hdotActivation * logisticFuncGreaterThan(totalHeat, 1.0);
+% totalHeat = hdotActivation + hdotMaintenance + hdotShortenLengthen;
+% hdotOverride = ones(size(hdotActivation)) - hdotMaintenance - hdotShortenLengthen;
+% hdotActivationLessThan = hdotOverride .* logisticFuncLessThan(totalHeat, ones(size(totalHeat)));
+% hdotActivationGreaterThan = hdotActivation .* logisticFuncGreaterThan(totalHeat, ones(size(totalHeat)));
+% hdotActivation = hdotActivationLessThan + hdotActivationGreaterThan;
 
 %% Total energy rate.
-heatRates = [hdotActivation, hdotMaintenance, hdotShortenLengthen, wdot, ...
-	hdotActivation + hdotMaintenance + hdotShortenLengthen + wdot];
+% heatRates = [hdotActivation, wdot, ...
+% 	hdotActivation + wdot];
+% heatRates = hdotActivation + hdotMaintenance + hdotShortenLengthen + wdot;
 
+heatRates = hdotActivation + wdot;
 end
 
 function [left] = logisticFuncLessThan(value, transPt)
 
-left = 1 ./ (1 + exp(100 * (value - transPt)));
+left = 1 ./ (1 + exp(100 .* (value - transPt)));
 
 end
 
