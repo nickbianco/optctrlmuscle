@@ -41,7 +41,7 @@
 % ----------------------------------------------------------------------- %
 %%
 
-function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc)
+function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,MuscleNames,MuscleData,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc)
 
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
@@ -56,6 +56,9 @@ if ~isfield(Misc, 'study') || isempty(Misc.study)
     Misc.study = 'DeGroote2016/';
 end
 study = strsplit(Misc.study,'/');
+if length(study) == 1
+   study{2} = ''; 
+end
 switch study{1}
     case 'DeGroote2016'
         tag = '';
@@ -63,6 +66,8 @@ switch study{1}
         tag = ['Exo' study{2}];
     case 'ISB2017'
         tag = ['ISB' study{2}];
+    case 'AnkleHipExosuit'
+        tag = 'AHE';
     otherwise
         tag = '';
 end
@@ -170,15 +175,28 @@ end
 if ~isfield(Misc, 'shift_exo_peaks') || isempty(Misc.shift_exo_peaks)
    Misc.shift_exo_peaks = false; 
 end
-
+if ~isfield(Misc, 'data_path') || isempty(Misc.data_path) 
+   Misc.data_path = ''; 
+end
+if ~isfield(Misc, 'cycle') || isempty(Misc.cycle)
+   Misc.cycle = -1; 
+end
+if ~isfield(Misc, 'subject') || isempty(Misc.subject) 
+   Misc.data_path = ''; 
+end
+if ~isfield(Misc, 'condition') || isempty(Misc.condition) 
+   Misc.data_path = ''; 
+end
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
-if strcmp(study{1},'SoftExosuitDesign') && ~strcmp(study{2},'Topology')
+if (strcmp(study{1},'SoftExosuitDesign') && ~strcmp(study{2},'Topology')) ... 
+    || strcmp(study{1}, 'AnkleHipExosuit')
     errmsg = [study{1} ': must specify force level'];
     assert(Misc.exo_force_level ~= -1,errmsg)
 end
 
-if ~strcmp(study{1},'SoftExosuitDesign') && strcmp(study{2},'Collins2015')
+if (~strcmp(study{1},'SoftExosuitDesign') && strcmp(study{2},'Collins2015')) ... 
+   || ~strcmp(study{1}, 'AnkleHipExosuit')
    errmsg = [study{1} '/' study{2} ': exosuit force level unused'];
    assert(Misc.exo_force_level == -1,errmsg)
 end
@@ -781,6 +799,54 @@ T_exo_shift = DatStore.T_exo; % Temp variable for shifting data
 DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
 % Reproduce Quinlivan et al. 2017 study
+if strcmp(study{1}, 'AnkleHipExosuit')
+    
+    fname = [Misc.subject '.mat'];
+    mat_path = fullfile(Misc.data_path, 'segmented', Misc.subject, fname);
+    data = load(mat_path);
+    
+    subject_mass = data.subject_data.bdy_mas.x.raw;
+    cycle = Misc.cycle;
+    switch Misc.exo_force_level
+        case 1
+            exoTime = data.stp_025.non_tme_r.x.raw(:,cycle);
+            ankleTorque = data.stp_025.aca_tor_r.x.raw(:,cycle) * subject_mass;
+            hipTorque = data.stp_025.ahf_tor_l.x.raw(:,cycle) * subject_mass;
+        case 2
+            exoTime = data.stp_050.non_tme_r.x.raw(:,cycle);
+            ankleTorque = data.stp_050.aca_tor_r.x.raw(:,cycle) * subject_mass;
+            hipTorque = data.stp_050.ahf_tor_l.x.raw(:,cycle) * subject_mass;
+        case 3
+            exoTime = data.stp_075.non_tme_r.x.raw(:,cycle);
+            ankleTorque = data.stp_075.aca_tor_r.x.raw(:,cycle) * subject_mass;
+            hipTorque = data.stp_075.ahf_tor_l.x.raw(:,cycle) * subject_mass;
+        case 4
+            exoTime = data.stp_100.non_tme_r.x.raw(:,cycle);
+            ankleTorque = data.stp_100.aca_tor_r.x.raw(:,cycle) * subject_mass;
+            hipTorque = data.stp_100.ahf_tor_l.x.raw(:,cycle) * subject_mass;
+        otherwise
+            error(['AnkleHipExosuit: exo_force_level must be in the range ' ...
+                   '1-4, but the value ' + num2str(Misc.exo_force_level) + ...
+                   'was provided.']);
+    end
+    
+    if strcmp(Misc.condition, 'slack')
+       exoTime = linspace(time(1), time(2), length(exoTime));
+    end
+    
+    for dof = 1:auxdata.Ndof
+        if strfind(DatStore.DOFNames{dof},'ankle_angle')
+            % Negative to match ankle_angle_r coord convention
+            DatStore.T_exo(:,dof) = -interp1(exoTime, ankleTorque, DatStore.time);
+        elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
+            % Negative to match hip_flexion_r coord convention
+            DatStore.T_exo(:,dof) = -interp1(exoTime, hipTorque, DatStore.time);
+        end
+    end
+    
+end
+
+
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
     % Exosuit moment curves
     currentFile = mfilename('fullpath');
@@ -1096,7 +1162,9 @@ elseif ispc
     
     % Create a new lock file for this process
     emptyVar = [];
-    save(pathLock, 'emptyVar')
+    if strcmp(setup.derivatives.supplier, 'adigator')
+        save(pathLock, 'emptyVar')
+    end
     
     % Perform serialzied task
     tdummy = guess.phase.time;
@@ -1113,7 +1181,9 @@ elseif ispc
     end
 
     % Remove the lockfile
-    system(sprintf('del %s',pathLock))
+    if strcmp(setup.derivatives.supplier, 'adigator')
+        system(sprintf('del %s',pathLock))
+    end
 
 else
     error('Platform unknown.')
@@ -1169,8 +1239,10 @@ for m = 1:auxdata.NMuscles
     LMTSpline(m) = spline(Time,lMTinterp(:,m));
     [LMT(:,m),VMT(:,m),~] = SplineEval_ppuval(LMTSpline(m),Time,1);
 end
-[lM,lMtilde,vM,vMtilde] = FiberLengthVelocity_Ftilde(TForcetilde,dTForcetilde, ... 
-    auxdata.params, LMT, VMT, auxdata.Fpparam);
+
+MuscleData = DeGroote2016Muscle_FtildeState(MActivation, TForcetilde, ...
+    dTForcetilde, LMT, VMT, auxdata.params, auxdata.Fvparam, auxdata.Fpparam, ... 
+    auxdata.Faparam);
 
 if strcmp(study{1},'ISB2017')
     if strcmp(study{2},'Quinlivan2017')
@@ -1197,6 +1269,7 @@ if strcmp(study{2},'Topology')
     end
 end
 
-
+if strcmp(study{1}, 'AnkleHipExosuit')
+    DatStore.ExoTorques_Act = calcExoTorques_FtildeAHE(OptInfo, DatStore);
 end
 
