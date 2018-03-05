@@ -348,8 +348,8 @@ if strcmp(study{2}, 'Topology')
     auxdata.hasActiveDevice = false;
     auxdata.hasPassiveDevice = false;
     
-    smallMomentArm = 0.03;
-    largeMomentArm = 0.10;
+    smallMomentArm = 0.10;
+    largeMomentArm = 1.00;
     
     numExoParams = 0;
     paramsLower = [];
@@ -357,7 +357,7 @@ if strcmp(study{2}, 'Topology')
     % Active device indicies
     if ~isempty(Misc.activeDOFs)
         auxdata.hasActiveDevice = true;
-        auxdata.Fmax_act = 25*auxdata.model_mass; % N/kg * kg
+        auxdata.Tmax_act = 5*auxdata.model_mass; % [N-m/kg] * [kg]
         auxdata.active.hip = 0;
         auxdata.active.knee = 0;
         auxdata.active.ankle = 0;
@@ -367,8 +367,8 @@ if strcmp(study{2}, 'Topology')
                 case 'hip'
                     numExoParams = numExoParams + 1;
                     auxdata.active.hip = numExoParams;
-                    paramsLower(numExoParams) = -0.10; %#ok<*AGROW>
-                    paramsUpper(numExoParams) = 0.10;
+                    paramsLower(numExoParams) = -1.0; %#ok<*AGROW>
+                    paramsUpper(numExoParams) = 1.0;
                     if length(dofInfo) > 1
                         switch dofInfo{2}
                             case 'flex'
@@ -417,8 +417,8 @@ if strcmp(study{2}, 'Topology')
                 case 'ankle'
                     numExoParams = numExoParams + 1;
                     auxdata.active.ankle = numExoParams;
-                    paramsLower(numExoParams) = -0.10;
-                    paramsUpper(numExoParams) = 0.10;
+                    paramsLower(numExoParams) = -1.0;
+                    paramsUpper(numExoParams) = 1.0;
                     if length(dofInfo) > 1
                         switch dofInfo{2}
                             case 'dorsi'

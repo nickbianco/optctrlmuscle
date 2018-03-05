@@ -86,9 +86,9 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Exosuit torques
 % Active device
-Texo_act_hip = input.auxdata.Fmax_act*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Fmax_act*aD_knee.*exoMomentArms(:,2)*input.auxdata.kneeAngleSign;
-Texo_act_ankle = input.auxdata.Fmax_act*aD_ankle.*exoMomentArms(:,3);
+Texo_act_hip = input.auxdata.Tmax_act*aD_hip.*exoMomentArms(:,1);
+Texo_act_knee = input.auxdata.Tmax_act*aD_knee.*exoMomentArms(:,2)*input.auxdata.kneeAngleSign;
+Texo_act_ankle = input.auxdata.Tmax_act*aD_ankle.*exoMomentArms(:,3);
 
 % Calculate passive force based on normalized exo path length
 k = input.auxdata.passiveStiffness;

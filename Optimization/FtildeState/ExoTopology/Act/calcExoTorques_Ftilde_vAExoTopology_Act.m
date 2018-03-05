@@ -41,9 +41,9 @@ end
 MomentArms_Act = exoMomentArms(1,:);
 
 % Exosuit torques
-Texo_act_hip = auxdata.Fmax_act*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = auxdata.Fmax_act*aD_knee.*exoMomentArms(:,2)*auxdata.kneeAngleSign;
-Texo_act_ankle = auxdata.Fmax_act*aD_ankle.*exoMomentArms(:,3);
+Texo_act_hip = auxdata.Tmax_act*aD_hip.*exoMomentArms(:,1);
+Texo_act_knee = auxdata.Tmax_act*aD_knee.*exoMomentArms(:,2)*auxdata.kneeAngleSign;
+Texo_act_ankle = auxdata.Tmax_act*aD_ankle.*exoMomentArms(:,3);
 
 ExoTorques_Act = zeros(length(time), Ndof);
 for dof = 1:Ndof
