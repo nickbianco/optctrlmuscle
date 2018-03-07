@@ -155,6 +155,10 @@ end
 if ~isfield(Misc, 'muscleShapeFactModifiers') || isempty(Misc.muscleShapeFactModifiers)
     Misc.muscleShapeFactModifiers = [];
 end
+% Modify individual muscle optimal fiber length (lMo)
+if ~isfield(Misc, 'optimalFiberLengthModifiers') || isempty(Misc.optimalFiberLengthModifiers)
+    Misc.optimalFiberLengthModifiers = [];
+end
 % ExoTopology: DOF's assisted by passive device
 if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
    Misc.passiveDOFs = []; 
@@ -271,8 +275,8 @@ end
 % Extract the muscle-tendon properties
 [DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle,DatStore.metabolicParams]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
 
-% Modify tendon stiffnesses
-fprintf('Muscles with modified tendon stiffness: \n')
+% Modify muscle properties
+fprintf('Muscles with modified properties: \n')
 for m = 1:DatStore.nMuscles
     muscle_name = Misc.MuscleNames_Input{m};
     if isfield(Misc.tendonStiffnessModifiers, muscle_name)
@@ -292,6 +296,10 @@ for m = 1:DatStore.nMuscles
         fprintf('--> %s muscle shape factor set to %f \n',muscle_name,DatStore.params(8,m))
     else
         DatStore.params(8,m) = 1;
+    end
+    if isfield(Misc.optimalFiberLengthModifiers, muscle_name)
+       DatStore.params(2,m) = DatStore.params(2,m) * Misc.optimalFiberLengthModifiers.(muscle_name);
+       fprintf('--> %s muscle optimal fiber length set to %f \n',muscle_name,DatStore.params(2,m))
     end
 end
 fprintf('\n')
