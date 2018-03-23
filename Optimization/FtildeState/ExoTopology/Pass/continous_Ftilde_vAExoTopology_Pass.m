@@ -54,7 +54,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,~,~,~,~] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+muscleData = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
 % Calculate passive force based on normalized exo path length
@@ -71,7 +71,7 @@ Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
+    T_sim=sum(muscleData.FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
 
     if dof==input.auxdata.hip_DOF
         T_sim = T_sim + Texo_pass_hip;
@@ -86,7 +86,7 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff Hilldiff act1 act2];
+phaseout.path = [Tdiff muscleData.err act1 act2];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit

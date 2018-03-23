@@ -44,13 +44,28 @@
 % ----------------------------------------------------------------------- %
 %%
 
-function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState(model_path,IK_path,ID_path,time,OutPath,Misc)
+function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,MuscleNames,MuscleData,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState(model_path,IK_path,ID_path,time,OutPath,Misc)
 
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
 % PART I: INPUTS FOR OPTIMAL CONTROL PROBLEM ---------------------------- %
 % ----------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
+if ~isfield(Misc, 'study') || isempty(Misc.study)
+    Misc.study = 'DeGroote2016/';
+end
+study = strsplit(Misc.study,'/');
+if length(study) == 1
+   study{2} = ''; 
+end
+switch study{1}
+    case 'DeGroote2016'
+        tag = '';
+    case 'ParameterCalibration'
+        tag = 'ParamCal';
+    otherwise
+        tag = '';
+end
 
 % ----------------------------------------------------------------------- %
 % Check for optional input arguments ------------------------------------ %
@@ -90,7 +105,58 @@ end
 if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
     Misc.Mesh_Frequency=100;
 end
+% Variable tendon stiffness
+if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
+    Misc.tendonStiffnessCoeff = 35;
+end
+% Modify individual tendon stiffnesses
+if ~isfield(Misc, 'tendonStiffnessModifiers') || isempty(Misc.tendonStiffnessModifiers)
+    Misc.tendonStiffnessModifiers = [];
+end
+% Modify individual passive muscle strain due to maximum isometric force (e0)
+if ~isfield(Misc, 'muscleStrainModifiers') || isempty(Misc.muscleStrainModifiers)
+    Misc.muscleStrainModifiers = [];
+end
+% Modify individual passive muscle force exponential shape factor (kpe)
+if ~isfield(Misc, 'muscleShapeFactModifiers') || isempty(Misc.muscleShapeFactModifiers)
+    Misc.muscleShapeFactModifiers = [];
+end
+% Modify individual muscle optimal fiber lengths (lMo)
+if ~isfield(Misc, 'optimalFiberLengthModifiers') || isempty(Misc.optimalFiberLengthModifiers)
+    Misc.optimalFiberLengthModifiers = [];
+end
+% Modify individual tendon slack lengths (lTs)
+if ~isfield(Misc, 'tendonSlackLengthModifiers') || isempty(Misc.tendonSlackLengthModifiers)
+    Misc.tendonSlackLengthModifiers = [];
+end
+% Modify individual pennation angles @ optimal fiber length (alphao)
+if ~isfield(Misc, 'pennationAngleModifiers') || isempty(Misc.pennationAngleModifiers)
+    Misc.pennationAngleModifiers = [];
+end
+% ParameterCalibration: Set of terms to include in the parameter calibration problem
+if ~isfield(Misc, 'parameterCalibrationTerms') || isempty(Misc.parameterCalibrationTerms)
+    Misc.parameterCalibrationTerms = [];
+end
+% ParameterCalibration: Filepaths to calibration datasets
+if ~isfield(Misc, 'parameterCalibrationData') || isempty(Misc.parameterCalibrationData)
+    Misc.parameterCalibrationData = [];
+end
 
+% ----------------------------------------------------------------------- %
+% Check that options are being specified correctly -----------------------%
+if strcmp(study{1}, 'ParameterCalibration')
+   errmsg = 'ParameterCalibration: must specify parameterCalibrationTerms struct';
+   assert(~isempty(Misc.parameterCalibrationTerms), errmsg)
+   
+   % These will be checked later, since we need to do checks on a muscle
+   % by muscle basis.
+   % Can only optimize muscle parameters from this list. An exception is thrown
+   % otherwise.
+   acceptable_params = {'optimal_fiber_length', 'tendon_slack_length', 'pennation_angle'};
+   % Can only set cost terms from this list. Also, a data file must exist 
+   % for each corresponding term. Exceptions are thrown otherwise.
+   acceptable_costs = {'emg', 'fiber_length', 'fiber_velocity'};
+end
 
 % ------------------------------------------------------------------------%
 % Compute ID -------------------------------------------------------------%
@@ -142,7 +208,94 @@ end
 % The solution of the static optimization is used as initial guess for the
 % dynamic optimization
 % Extract the muscle-tendon properties
-[DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+[DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle,DatStore.metabolicParams]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+
+% Check that calibration terms were provided for muscles that exist in
+% the model
+if strcmp(study{1}, 'ParameterCalibration')
+    emgCostMuscles = cell(0);
+    fiberLengthCostMuscles = cell(0);
+    fiberVelocityCostMuscles = cell(0);
+    musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
+    for m = 1:length(musclesToCalibrate)
+        muscle_name = musclesToCalibrate{m};
+        errmsg = ['ParameterCalibration: calibration terms provided for ' ...
+             muscle_name ' but this muscle does not exist in the model'];
+        assert(ismember(muscle_name, DatStore.MuscleNames), errmsg);
+        
+        paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
+        errmsg = ['ParameterCalibration: invalid parameter list provided for ' muscle_name '.'];
+        assert(all(ismember(paramsToCalibrate, acceptable_params)), errmsg);
+        
+        calibrationCosts = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).costs;
+        errmsg = ['ParameterCalibration: invalid cost term provided for ' muscle_name '.'];
+        assert(all(ismember(calibrationCosts, acceptable_costs)), errmsg);
+        errmsg = ['CalibrateParameter: data files not provided for all cost terms for ' muscle_name '.'];
+        assert(all(ismember(calibrationCosts, fieldnames(Misc.parameterCalibrationData))), errmsg);
+        
+        for c = 1:length(calibrationCosts)
+           switch calibrationCosts{c}
+               case 'emg'
+                   emgCostMuscles{length(emgCostMuscles)+1} = musclesToCalibrate{m};
+               case 'fiber_length'
+                   fiberLengthCostMuscles{length(fiberLengthCostMuscles)+1} = musclesToCalibrate{m};
+               case 'fiber_velocity'
+                   fiberVelocityCostMuscles{length(fiberVelocityCostMuscles)+1} = musclesToCalibrate{m};
+           end 
+        end
+        
+    end
+end
+
+% Modify muscle properties
+fprintf('Muscles with modified properties: \n')
+for m = 1:DatStore.nMuscles
+    muscle_name = DatStore.MuscleNames{m};
+    if isfield(Misc.tendonStiffnessModifiers, muscle_name) 
+        DatStore.params(6,m) = Misc.tendonStiffnessModifiers.(muscle_name);
+        fprintf('--> %s tendon coefficient set to %f \n',muscle_name,DatStore.params(6,m))
+    else
+        DatStore.params(6,m) = 1;
+    end
+    if isfield(Misc.muscleStrainModifiers, muscle_name)
+        DatStore.params(7,m) = Misc.muscleStrainModifiers.(muscle_name);
+        fprintf('--> %s muscle strain set to %f \n',muscle_name,DatStore.params(7,m))
+    else
+        DatStore.params(7,m) = 1;
+    end
+    if isfield(Misc.muscleShapeFactModifiers, muscle_name)
+        DatStore.params(8,m) = Misc.muscleShapeFactModifiers.(muscle_name);
+        fprintf('--> %s muscle shape factor set to %f \n',muscle_name,DatStore.params(8,m))
+    else
+        DatStore.params(8,m) = 1;
+    end
+    if isfield(Misc.optimalFiberLengthModifiers, muscle_name) && ...
+            ~ismember('optimal_fiber_length', Misc.parameterCalibrationTerms.(muscle_name).params)
+    
+        DatStore.params(9,m) = Misc.optimalFiberLengthModifiers.(muscle_name);
+        fprintf('--> %s muscle optimal fiber length set to %f \n',muscle_name,DatStore.params(9,m))
+    else
+        DatStore.params(9,m) = 1;
+    end
+    if isfield(Misc.tendonSlackLengthModifiers, muscle_name) && ...
+            ~ismember('tendon_slack_length', Misc.parameterCalibrationTerms.(muscle_name).params)
+        
+        DatStore.params(10,m) = Misc.tendonSlackLengthModifiers.(muscle_name);
+        fprintf('--> %s muscle tendon slack length set to %f \n',muscle_name,DatStore.params(10,m))
+    else
+        DatStore.params(10,m) = 1;
+    end
+    if isfield(Misc.pennationAngleModifiers, muscle_name) && ... 
+            ~ismember('pennation_angle', Misc.parameterCalibrationTerms.(muscle_name).params)
+        
+        DatStore.params(11,m) = Misc.pennationAngleModifiers.(muscle_name);
+        fprintf('--> %s muscle pennation angle set to %f \n',muscle_name,DatStore.params(11,m))
+    else
+        DatStore.params(11,m) = 1;
+    end
+end
+fprintf('\n')
+
 % Static optimization using IPOPT solver
 DatStore = SolveStaticOptimization_IPOPT(DatStore);
 
@@ -153,11 +306,18 @@ DatStore = SolveStaticOptimization_IPOPT(DatStore);
 % ----------------------------------------------------------------------- %
 
 % Input arguments
+DatStore.formulation = 'Ftilde';
 auxdata.NMuscles = DatStore.nMuscles;   % number of muscles
 auxdata.Ndof = DatStore.nDOF;           % humber of dods
 % DatStore.time = DatStore.time;          % time window
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
+auxdata.metabolicParams = DatStore.metabolicParams; % Parameters for calculating metabolic cost
+auxdata.MuscleNames = DatStore.MuscleNames;
+if strcmp(study{1}, 'ParameterCalibration')
+   auxdata.parameterCalibrationTerms = Misc.parameterCalibrationTerms; 
+end
+
 
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
 for i = 1:auxdata.Ndof
@@ -179,10 +339,13 @@ auxdata.Fvparam = Fvparam;
 load Faparam.mat                            
 auxdata.Faparam = Faparam;
 
-% Parameters of passive muscle force-length characteristic
-e0 = 0.6; kpe = 4; t50 = exp(kpe * (0.2 - 0.10e1) / e0);
+% Parameters of passive muscle force-length characteristic, and tendon
+% characteristic
+e0 = 0.6*DatStore.params(7,:); 
+kpe = 4*DatStore.params(8,:); 
+t50 = exp(kpe .* (0.2 - 0.10e1) ./ e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
-auxdata.Fpparam = [pp1;pp2];
+auxdata.Fpparam = [pp1;pp2;ones(1,length(pp1))*Misc.tendonStiffnessCoeff];
 
 % Problem bounds 
 e_min = 0; e_max = 1;           % bounds on muscle excitation
@@ -211,6 +374,28 @@ bounds.phase.finalstate.lower = [actMin, Ffmin]; bounds.phase.finalstate.upper =
 bounds.phase.integral.lower = 0; 
 bounds.phase.integral.upper = 10000*(tf-t0);
 
+% Parameter bounds 
+if strcmp(study{1}, 'ParameterCalibration')
+    parameterCalibrationIndices = struct();
+    index = 1;
+    params_lower = [];
+    params_upper = [];
+    musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
+    for m = 1:length(musclesToCalibrate)
+        paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
+        for p = 1:length(paramsToCalibrate)
+            params_lower = [params_lower 0.75];
+            params_upper = [params_upper 1.25];
+            parameterCalibrationIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p}) = index;
+            index = index + 1;
+        end
+    end
+    
+    bounds.parameter.lower = params_lower;
+    bounds.parameter.upper = params_upper;
+    auxdata.parameterCalibrationIndices = parameterCalibrationIndices;
+end
+
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
@@ -231,16 +416,95 @@ guess.phase.state =  [DatStore.SoAct DatStore.SoAct];
 
 guess.phase.integral = 0;
 
+if strcmp(study{1}, 'ParameterCalibration')
+    params_guess = [];
+    musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
+    for m = 1:length(musclesToCalibrate)
+        paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
+        for p = 1:length(paramsToCalibrate)
+            params_guess = [params_guess 1.0];
+        end
+    end
+    
+    guess.parameter = params_guess;
+end
+
 % Spline structures
+DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 for dof = 1:auxdata.Ndof
     for m = 1:auxdata.NMuscles       
         auxdata.JointMASpline(dof).Muscle(m) = spline(DatStore.time,auxdata.MA(dof).Joint(:,m));       
     end
     auxdata.JointIDSpline(dof) = spline(DatStore.time,DatStore.T_exp(:,dof));
+    auxdata.JointEXOSpline(dof) = spline(DatStore.time,DatStore.T_exo(:,dof));
+    auxdata.JointIKSpline(dof) = spline(DatStore.time,DatStore.q_exp(:,dof));
 end
 
 for m = 1:auxdata.NMuscles
     auxdata.LMTSpline(m) = spline(DatStore.time,DatStore.LMT(:,m));
+end
+
+% Spline calibration cost data
+if strcmp(study{1}, 'ParameterCalibration')
+    % Create muscle name map to access correct data columns
+    keySet = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r'};
+    valueSet = {'gasmed_r','glmax2_r','recfem_r','semimem_r','soleus_r','tibant_r','vasmed_r'};
+    musc_map = containers.Map(keySet, valueSet);
+    
+    % Spline EMG data
+    interpEMGToSpline = zeros(length(DatStore.time), DatStore.nMuscles);
+    if ~isempty(emgCostMuscles)
+        emg = tdfread(Misc.parameterCalibrationData.emg);
+        startTime = DatStore.time(1);
+        endTime = DatStore.time(end);
+        [~, startIdx] = min(abs(emg.time - startTime));
+        [~, endIdx] = min(abs(emg.time - endTime));
+        for m = 1:length(emgCostMuscles)
+            muscleEMG = emg.(musc_map(emgCostMuscles{m}));
+            emgMuscInterp = interp1(emg.time(startIdx:endIdx), muscleEMG(startIdx:endIdx), DatStore.time);
+            muscIdx = find(contains(DatStore.MuscleNames, emgCostMuscles{m}));
+            interpEMGToSpline(:,muscIdx) = emgMuscInterp;
+        end
+    end
+    
+    % Spline fiber length data
+    interpFLToSpline = zeros(length(DatStore.time), DatStore.nMuscles);
+    if ~isempty(fiberLengthCostMuscles)
+        fiber_length = tdfread(Misc.parameterCalibrationData.fiber_length);
+        startTime = DatStore.time(1);
+        endTime = DatStore.time(end);
+        [~, startIdx] = min(abs(fiber_length.time - startTime));
+        [~, endIdx] = min(abs(fiber_length.time - endTime));
+        for m = 1:length(fiberLengthCostMuscles)
+            muscleFL = fiber_length.(musc_map(fiberLengthCostMuscles{m}));
+            flMuscInterp = interp1(fiber_length.time(startIdx:endIdx), muscleFL(startIdx:endIdx), DatStore.time);
+            muscIdx = find(contains(DatStore.MuscleNames, fiberLengthCostMuscles{m}));
+            interpFLToSpline(:,muscIdx) = flMuscInterp;
+        end
+    end
+    
+    % Spline fiber velocity data
+    interpFVToSpline = zeros(length(DatStore.time), DatStore.nMuscles);
+    if ~isempty(fiberVelocityCostMuscles)
+        fiber_velocity = tdfread(Misc.parameterCalibrationData.fiber_velocity);
+        startTime = DatStore.time(1);
+        endTime = DatStore.time(end);
+        [~, startIdx] = min(abs(fiber_velocity.time - startTime));
+        [~, endIdx] = min(abs(fiber_velocity.time - endTime));
+        for m = 1:length(fiberVelocityCostMuscles)
+            muscleFV = fiber_velocity.(musc_map(fiberVelocityCostMuscles{m}));
+            fvMuscInterp = interp1(fiber_velocity.time(startIdx:endIdx), muscleFV(startIdx:endIdx), DatStore.time);
+            muscIdx = find(contains(DatStore.MuscleNames, fiberVelocityCostMuscles{m}));
+            interpFVToSpline(:,muscIdx) = fvMuscInterp;
+        end
+    end
+    
+    for m = 1:DatStore.nMuscles
+        auxdata.EMGSpline(m) = spline(DatStore.time, interpEMGToSpline(:,m));
+        auxdata.FLSpline(m) = spline(DatStore.time, interpFLToSpline(:,m));
+        auxdata.FVSpline(m) = spline(DatStore.time, interpFVToSpline(:,m));     
+    end
+    
 end
 
 % GPOPS setup        
@@ -250,14 +514,14 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.derivatives.derivativelevel = 'second';
-setup.nlp.ipoptoptions.tolerance = 1e-6;
-setup.nlp.ipoptoptions.maxiterations = 2000;
-setup.derivatives.supplier = 'adigator';
+setup.derivatives.derivativelevel = 'first';
+setup.nlp.ipoptoptions.tolerance = 1e-3;
+setup.nlp.ipoptoptions.maxiterations = 10000;
+setup.derivatives.supplier = 'sparseCD';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-3;
-setup.mesh.maxiterations = 0;
+setup.mesh.tolerance = 1e-4;
+setup.mesh.maxiterations = 20;
 setup.mesh.colpointsmin = 3;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
@@ -265,8 +529,8 @@ setup.displaylevel = 2;
 NMeshIntervals = round((tf-t0)*Misc.Mesh_Frequency);
 setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
-setup.functions.continuous = @musdynContinous_FtildeState;
-setup.functions.endpoint = @musdynEndpoint_FtildeState;
+setup.functions.continuous = str2func(['continous_Ftilde' tag]);
+setup.functions.endpoint = str2func(['endpoint_Ftilde' tag]);
     
 % ADiGator setup
 persistent splinestruct
@@ -280,13 +544,13 @@ for Scount = 1:length(splinenames)
   splinestruct.(splinenames{Scount}) = zeros(0,secdim);
 end
 setup.auxdata.splinestruct = splinestructad;
-adigatorGenFiles4gpops2(setup)
+% adigatorGenFiles4gpops2(setup)
 
-setup.functions.continuous = @Wrap4musdynContinous_FtildeState;
-setup.adigatorgrd.continuous = @musdynContinous_FtildeStateGrdWrap;
-setup.adigatorgrd.endpoint   = @musdynEndpoint_FtildeStateADiGatorGrd;
-setup.adigatorhes.continuous = @musdynContinous_FtildeStateHesWrap;
-setup.adigatorhes.endpoint   = @musdynEndpoint_FtildeStateADiGatorHes;
+setup.functions.continuous = str2func(['Wrap4continous_Ftilde' tag]);
+setup.adigatorgrd.continuous = str2func(['continous_Ftilde' tag 'GrdWrap']);
+setup.adigatorgrd.endpoint   = str2func(['endpoint_Ftilde' tag 'ADiGatorGrd']);
+setup.adigatorhes.continuous = str2func(['continous_Ftilde' tag 'HesWrap']);
+setup.adigatorhes.endpoint   = str2func(['endpoint_Ftilde' tag 'ADiGatorHes']);
 
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
@@ -301,15 +565,21 @@ Time=res.time;
 MActivation=res.state(:,1:auxdata.NMuscles);
 TForcetilde=res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
 TForce=TForcetilde.*(ones(size(Time))*DatStore.Fiso);
+dTForcetilde = 10*res.control(:,auxdata.NMuscles+auxdata.Ndof+1:auxdata.NMuscles+auxdata.Ndof+auxdata.NMuscles); 
 MExcitation=res.control(:,1:auxdata.NMuscles);
 RActivation=res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
 MuscleNames=DatStore.MuscleNames;
 OptInfo=output;
 
-% Muscle fiber length from Ftilde
-% Interpolation lMT
-lMTinterp = interp1(DatStore.time,DatStore.LMT,Time);
-[lM,lMtilde] = FiberLength_Ftilde(TForcetilde,auxdata.params,lMTinterp);
+% Retrieve splined muscle length and velocity curves
+for m = 1:auxdata.NMuscles
+    [LMT(:,m),VMT(:,m),~] = SplineEval_ppuval(auxdata.LMTSpline(m),Time,1);
+end
+
+% Get muscle data from DeGroote muscle model
+MuscleData = DeGroote2016Muscle_FtildeState(MActivation, TForcetilde, ...
+    dTForcetilde, LMT, VMT, auxdata.params, auxdata.Fvparam, auxdata.Fpparam, ... 
+    auxdata.Faparam);
 
 end
 

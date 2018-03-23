@@ -6,6 +6,9 @@ Ndof = input.auxdata.Ndof;
 
 sstruct.LMT = zeros(numColPoints,NMuscles);
 sstruct.VMT = zeros(numColPoints,NMuscles);
+sstruct.EMG = zeros(numColPoints,NMuscles);
+sstruct.FL = zeros(numColPoints,NMuscles);
+sstruct.FV = zeros(numColPoints,NMuscles);
 
 for dof = 1:Ndof
     for m = 1:NMuscles
@@ -19,4 +22,13 @@ end
 
 for m = 1:NMuscles
     [sstruct.LMT(:,m),sstruct.VMT(:,m),~] = SplineEval_ppuval(input.auxdata.LMTSpline(m),t,1);
+    if isfield(input.auxdata, 'EMGSpline')
+        sstruct.EMG(:,m) = ppval(input.auxdata.EMGSpline(m),t);
+    end
+    if isfield(input.auxdata, 'FLSpline')
+        sstruct.FL(:,m) = ppval(input.auxdata.FLSpline(m),t);
+    end
+    if isfield(input.auxdata, 'FVSpline')
+        sstruct.FV(:,m) = ppval(input.auxdata.FVSpline(m),t);
+    end
 end

@@ -41,7 +41,7 @@
 % ----------------------------------------------------------------------- %
 %%
 
-function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,lMtilde,lM,MuscleNames,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc)
+function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,MuscleNames,MuscleData,OptInfo,DatStore]=SolveMuscleRedundancy_FtildeState_actdyn(model_path,IK_path,ID_path,time,OutPath,Misc)
 
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
@@ -1169,8 +1169,10 @@ for m = 1:auxdata.NMuscles
     LMTSpline(m) = spline(Time,lMTinterp(:,m));
     [LMT(:,m),VMT(:,m),~] = SplineEval_ppuval(LMTSpline(m),Time,1);
 end
-[lM,lMtilde,vM,vMtilde] = FiberLengthVelocity_Ftilde(TForcetilde,dTForcetilde, ... 
-    auxdata.params, LMT, VMT, auxdata.Fpparam);
+
+MuscleData = DeGroote2016Muscle_FtildeState(MActivation, TForcetilde, ...
+    dTForcetilde, LMT, VMT, auxdata.params, auxdata.Fvparam, auxdata.Fpparam, ... 
+    auxdata.Faparam);
 
 if strcmp(study{1},'ISB2017')
     if strcmp(study{2},'Quinlivan2017')
