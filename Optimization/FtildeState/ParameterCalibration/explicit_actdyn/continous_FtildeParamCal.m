@@ -90,7 +90,7 @@ for m = 1:length(musclesToCalibrate)
 end
 
 w1 = 1000;
-phaseout.integrand = w1.*sum(aT.^2,2) + 0.1*cal_integrand + 0.1*sum(a.^2,2);
+phaseout.integrand = w1.*sum(aT.^2,2) + 0.75*cal_integrand + sum(a.^2,2);
 
 
 

@@ -362,6 +362,21 @@ umin = e_min*ones(1,auxdata.NMuscles); umax = e_max*ones(1,auxdata.NMuscles);
 dFMin = dF_min*ones(1,auxdata.NMuscles); dFMax = dF_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); aTmax = 1*ones(1,auxdata.Ndof);
 bounds.phase.control.lower = [umin aTmin dFMin]; bounds.phase.control.upper = [umax aTmax dFMax];
+if strcmp(study{1}, 'ParameterCalibration')
+    musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
+    for m = 1:length(musclesToCalibrate)
+       muscIdx = find(contains(DatStore.MuscleNames, musclesToCalibrate{m}));
+       if isfield(Misc.parameterCalibrationTerms.(musclesToCalibrate{m}), 'bounds')
+           muscCalibrationBounds = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).bounds;
+           if isfield(muscCalibrationBounds, 'excitation')
+               bounds.phase.control.lower(muscIdx) = muscCalibrationBounds.excitation.lower;
+               bounds.phase.control.upper(muscIdx) = muscCalibrationBounds.excitation.upper;
+           end
+           
+       end
+    end
+end
+
 % States bounds
 actMin = a_min*ones(1,auxdata.NMuscles); actMax = a_max*ones(1,auxdata.NMuscles);
 F0min = F_min*ones(1,auxdata.NMuscles); F0max = F_max*ones(1,auxdata.NMuscles);
@@ -447,8 +462,8 @@ end
 % Spline calibration cost data
 if strcmp(study{1}, 'ParameterCalibration')
     % Create muscle name map to access correct data columns
-    keySet = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r'};
-    valueSet = {'gasmed_r','glmax2_r','recfem_r','semimem_r','soleus_r','tibant_r','vasmed_r'};
+    keySet = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r','psoas_r'};
+    valueSet = {'gasmed_r','glmax2_r','recfem_r','semimem_r','soleus_r','tibant_r','vasmed_r','recfem_r'};
     musc_map = containers.Map(keySet, valueSet);
     
     % Spline EMG data
@@ -515,14 +530,14 @@ setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
 setup.derivatives.derivativelevel = 'first';
-setup.nlp.ipoptoptions.tolerance = 1e-3;
+setup.nlp.ipoptoptions.tolerance = 1e-2;
 setup.nlp.ipoptoptions.maxiterations = 10000;
 setup.derivatives.supplier = 'sparseCD';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-4;
-setup.mesh.maxiterations = 20;
-setup.mesh.colpointsmin = 3;
+setup.mesh.maxiterations = 10;
+setup.mesh.colpointsmin = 5;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
 setup.displaylevel = 2;
