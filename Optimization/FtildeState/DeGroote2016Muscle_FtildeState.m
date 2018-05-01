@@ -74,11 +74,11 @@ fce = a.*FMltilde.*FMvtilde;
 e0 = 0.6*muscleStrainModifier;
 kpe = 4*muscleShapeFactModifier;
 t5 = exp(kpe .* (lMtilde - 0.10e1) ./ e0);
-fpe = ((t5 - 0.10e1) - Fpparam(1,:)) ./ Fpparam(2,:);
+Fpe = ((t5 - 0.10e1) - Fpparam(1,:)) ./ Fpparam(2,:);
 
 % Muscle force
 Fce = FMo.*fce;
-Fpe = FMo.*fpe;
+fpe = Fpe./FMo;
 FM = Fce + Fpe;
 
 % Tendon force
@@ -104,5 +104,6 @@ muscleData.lMtilde = lMtilde;
 muscleData.lM = lM;
 muscleData.vMtilde = vMtilde;
 muscleData.vM = vM;
+muscleData.cos_alpha = cos_alpha;
 
 end

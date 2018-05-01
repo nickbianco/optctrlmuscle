@@ -25,7 +25,7 @@ act1 = vA + a./(ones(size(a,1),1)*tauDeact);
 act2 = vA + a./(ones(size(a,1),1)*tauAct);
 
 % Hill-equilibrium constraint
-[Hilldiff,F,Fce,Fiso,vMtilde,lMtilde] = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
+muscleData = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Moments constraint
 Topt = 150;
@@ -33,11 +33,11 @@ Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(F.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
+    T_sim=sum(muscleData.FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff Hilldiff act1 act2];
+phaseout.path = [Tdiff muscleData.err act1 act2];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit
@@ -47,13 +47,19 @@ phaseout.dynamics = [vA dFtilde];
 % OBJECTIVE FUNCTION
 Edot = zeros(numColPoints, NMuscles);
 for m = 1:NMuscles
-    Lce = lMtilde(:,m)*params(2,m);
-    Vce = vMtilde(:,m)*params(5,m);
+    Lce = muscleData.lMtilde(:,m)*params(2,m);
+    Vce = muscleData.vMtilde(:,m)*params(5,m);
     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
     paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
                    metabolicParams(3,m), metabolicParams(4,m), ...
                    metabolicParams(5,m)];
-    Edot(:,m) = calcUmbergerCost2010(Lce, Vce, Fce(:,m), Fiso(:,m), u, a(:,m), paramStruct);
+    Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
+                                     Vce, ...
+                                     max(0, muscleData.Fce(:,m)), ...
+                                     max(0, muscleData.FMltilde(:,m)), ...
+                                     min(max(0, u), 1), ...
+                                     min(max(0, a(:,m)), 1), ...
+                                     paramStruct);
 end
 
 w_aT = 1000;

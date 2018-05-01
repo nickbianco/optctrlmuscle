@@ -141,6 +141,10 @@ end
 if ~isfield(Misc, 'parameterCalibrationData') || isempty(Misc.parameterCalibrationData)
     Misc.parameterCalibrationData = [];
 end
+% ParameterCalibration: option to pre-calibrate passive muscle properties
+if ~isfield(Misc, 'precalibrate_passive_moments') || isempty(Misc.precalibrate_passive_moments)
+   Misc.precalibrate_passive_moments = true; 
+end
 
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
@@ -152,7 +156,7 @@ if strcmp(study{1}, 'ParameterCalibration')
    % by muscle basis.
    % Can only optimize muscle parameters from this list. An exception is thrown
    % otherwise.
-   acceptable_params = {'optimal_fiber_length', 'tendon_slack_length', 'pennation_angle'};
+   acceptable_params = {'optimal_fiber_length', 'tendon_slack_length', 'pennation_angle', 'muscle_strain'};
    % Can only set cost terms from this list. Also, a data file must exist 
    % for each corresponding term. Exceptions are thrown otherwise.
    acceptable_costs = {'emg', 'fiber_length', 'fiber_velocity'};
@@ -162,11 +166,11 @@ end
 % Compute ID -------------------------------------------------------------%
 if isempty(ID_path) || ~exist(ID_path,'file')
     disp('ID path was not specified or the file does not exist, computation ID started');
-    if ~isfield(Misc,'Loads_path') || isempty(Misc.Loads_path) || ~exist(Misc.Loads_path,'file');
+    if ~isfield(Misc,'Loads_path') || isempty(Misc.Loads_path) || ~exist(Misc.Loads_path,'file')
         error('External loads file was not specified or does not exist, please add the path to the external loads file: Misc.Loads_path');
     else
         %check the output path for the ID results
-        if isfield(Misc,'ID_ResultsPath');
+        if isfield(Misc,'ID_ResultsPath')
             [idpath,~]=fileparts(Misc.ID_ResultsPath);
             if ~isdir(idpath); mkdir(idpath); end
         else 
@@ -223,27 +227,30 @@ if strcmp(study{1}, 'ParameterCalibration')
              muscle_name ' but this muscle does not exist in the model'];
         assert(ismember(muscle_name, DatStore.MuscleNames), errmsg);
         
-        paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
-        errmsg = ['ParameterCalibration: invalid parameter list provided for ' muscle_name '.'];
-        assert(all(ismember(paramsToCalibrate, acceptable_params)), errmsg);
-        
-        calibrationCosts = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).costs;
-        errmsg = ['ParameterCalibration: invalid cost term provided for ' muscle_name '.'];
-        assert(all(ismember(calibrationCosts, acceptable_costs)), errmsg);
-        errmsg = ['CalibrateParameter: data files not provided for all cost terms for ' muscle_name '.'];
-        assert(all(ismember(calibrationCosts, fieldnames(Misc.parameterCalibrationData))), errmsg);
-        
-        for c = 1:length(calibrationCosts)
-           switch calibrationCosts{c}
-               case 'emg'
-                   emgCostMuscles{length(emgCostMuscles)+1} = musclesToCalibrate{m};
-               case 'fiber_length'
-                   fiberLengthCostMuscles{length(fiberLengthCostMuscles)+1} = musclesToCalibrate{m};
-               case 'fiber_velocity'
-                   fiberVelocityCostMuscles{length(fiberVelocityCostMuscles)+1} = musclesToCalibrate{m};
-           end 
+        if isfield(Misc.parameterCalibrationTerms.(musclesToCalibrate{m}), 'params')
+            paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
+            errmsg = ['ParameterCalibration: invalid parameter list provided for ' muscle_name '.'];
+            assert(all(ismember(paramsToCalibrate, acceptable_params)), errmsg);
         end
         
+        if isfield(Misc.parameterCalibrationTerms.(musclesToCalibrate{m}), 'costs')
+            calibrationCosts = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).costs;
+            errmsg = ['ParameterCalibration: invalid cost term provided for ' muscle_name '.'];
+            assert(all(ismember(calibrationCosts, acceptable_costs)), errmsg);
+            errmsg = ['CalibrateParameter: data files not provided for all cost terms for ' muscle_name '.'];
+            assert(all(ismember(calibrationCosts, fieldnames(Misc.parameterCalibrationData))), errmsg);
+       
+            for c = 1:length(calibrationCosts)
+               switch calibrationCosts{c}
+                   case 'emg'
+                       emgCostMuscles{length(emgCostMuscles)+1} = musclesToCalibrate{m};
+                   case 'fiber_length'
+                       fiberLengthCostMuscles{length(fiberLengthCostMuscles)+1} = musclesToCalibrate{m};
+                   case 'fiber_velocity'
+                       fiberVelocityCostMuscles{length(fiberVelocityCostMuscles)+1} = musclesToCalibrate{m};
+               end 
+            end
+        end
     end
 end
 
@@ -318,7 +325,6 @@ if strcmp(study{1}, 'ParameterCalibration')
    auxdata.parameterCalibrationTerms = Misc.parameterCalibrationTerms; 
 end
 
-
 % ADiGator works with 2D: convert 3D arrays to 2D structure (moment arms)
 for i = 1:auxdata.Ndof
     auxdata.MA(i).Joint(:,:) = DatStore.dM(:,i,:);  % moment arms
@@ -338,6 +344,17 @@ auxdata.Fvparam = Fvparam;
 % Parameters of active muscle force-length characteristic
 load Faparam.mat                            
 auxdata.Faparam = Faparam;
+
+% Pre-calibration to passive moments from Silder et al. 2007
+if strcmp(study{1}, 'ParameterCalibration') && Misc.precalibrate_passive_moments
+   calibratedModifiers = PassiveMomentCalibration(model_path, auxdata, DatStore);
+   
+   % Update parameter structs
+   DatStore.params(9,:) = calibratedModifieres.lMo;
+   DatStore.params(10,:) = calibratedModifiers.lTs;
+   DatStore.params(7,:) = calibratedModifiers.e0;
+   auxdata.params = DatStore.params;
+end
 
 % Parameters of passive muscle force-length characteristic, and tendon
 % characteristic
@@ -397,10 +414,33 @@ if strcmp(study{1}, 'ParameterCalibration')
     params_upper = [];
     musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
     for m = 1:length(musclesToCalibrate)
+        muscIdx = find(contains(DatStore.MuscleNames, musclesToCalibrate{m}));
         paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
         for p = 1:length(paramsToCalibrate)
-            params_lower = [params_lower 0.75];
-            params_upper = [params_upper 1.25];
+            if strcmp(paramsToCalibrate{p}, 'muscle_strain')
+                error(['Not currently supporting muscle strain in full parameter optimization, only ' ...
+                       'in passive calibration problem']);
+            elseif strcmp(paramsToCalibrate{p}, 'optimal_fiber_length')
+                currVal = auxdata.params(9, muscIdx);
+            elseif strcmp(paramsToCalibrate{p}, 'tendon_slack_length')
+                currVal = auxdata.params(10, muscIdx);
+            end
+            
+            if 0.75*currVal < 0.75
+                currLower = 0.75;
+            else
+                currLower = 0.75*currVal;
+            end
+            
+            if 1.25*currVal > 1.25
+                currUpper = 1.25;
+            else
+                currUpper = 1.25*currVal;
+            end
+            
+            params_lower = [params_lower currLower];
+            params_upper = [params_upper currUpper];
+            
             parameterCalibrationIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p}) = index;
             index = index + 1;
         end

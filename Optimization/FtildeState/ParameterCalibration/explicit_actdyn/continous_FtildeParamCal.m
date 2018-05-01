@@ -28,18 +28,22 @@ musclesToCalibrate = fieldnames(terms);
 MuscleNames = input.auxdata.MuscleNames;
 
 for m = 1:length(musclesToCalibrate)
-    muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
-    paramsToCalibrate = terms.(musclesToCalibrate{m}).params;
-    for p = 1:length(paramsToCalibrate)
-        idx = paramIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p});
-        paramVal = parameters(1,idx);
-        switch paramsToCalibrate{p}
-            case 'optimal_fiber_length'
-                params(9,muscIdx) = paramVal;
-            case 'tendon_slack_length'
-                params(10,muscIdx) = paramVal;
-            case 'pennation_angle'
-                params(11,muscIdx) = paramVal;
+    if isfield(terms.(musclesToCalibrate{m}), 'params')
+        muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
+        paramsToCalibrate = terms.(musclesToCalibrate{m}).params;
+        for p = 1:length(paramsToCalibrate)
+            idx = paramIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p});
+            paramVal = parameters(1,idx);
+            switch paramsToCalibrate{p}
+                case 'optimal_fiber_length'
+                    params(9,muscIdx) = paramVal;
+                case 'tendon_slack_length'
+                    params(10,muscIdx) = paramVal;
+                case 'pennation_angle'
+                    params(11,muscIdx) = paramVal;
+                case 'muscle_strain'
+                    params(7,muscIdx) = paramVal;
+            end
         end
     end
 end
@@ -73,24 +77,31 @@ phaseout.dynamics = [dadt dFtilde];
 % OBJECTIVE FUNCTION
 cal_integrand = 0;
 for m = 1:length(musclesToCalibrate)
-    muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
-    
-    calibrationCosts = terms.(musclesToCalibrate{m}).costs;
-    for c = 1:length(calibrationCosts)
-        switch calibrationCosts{c}
-            case 'emg'
-                err = (e(:,muscIdx) - splinestruct.EMG(:,muscIdx));
-            case 'fiber_length'
-                err = (muscleData.lMtilde(:,muscIdx) - splinestruct.FL(:,muscIdx));
-            case 'fiber_velocity'
-                err = (muscleData.vMtilde(:,muscIdx) - splinestruct.FV(:,muscIdx));   
+    if isfield(terms.(musclesToCalibrate{m}), 'costs')
+        muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
+
+        calibrationCosts = terms.(musclesToCalibrate{m}).costs;
+        for c = 1:length(calibrationCosts)
+            switch calibrationCosts{c}
+                case 'emg'
+                    err = (e(:,muscIdx) - splinestruct.EMG(:,muscIdx));
+                case 'fiber_length'
+                    err = (muscleData.lMtilde(:,muscIdx) - splinestruct.FL(:,muscIdx));
+                case 'fiber_velocity'
+                    err = (muscleData.vMtilde(:,muscIdx) - splinestruct.FV(:,muscIdx));   
+            end
+            cal_integrand = cal_integrand + sum(err.^2,2);
         end
-        cal_integrand = cal_integrand + sum(err.^2,2);
     end
 end
 
+% Penalty on parameters deviating from nominal
+param_dev = 4*(parameters(1,:)-1).^2;
+
 w1 = 1000;
-phaseout.integrand = w1.*sum(aT.^2,2) + 0.75*cal_integrand + sum(a.^2,2);
+wAct = 0.1;
+wParam = 0.1;
+phaseout.integrand = w1.*sum(aT.^2,2) + cal_integrand + wAct*sum(a.^2,2) + wParam*sum(param_dev,2);
 
 
 

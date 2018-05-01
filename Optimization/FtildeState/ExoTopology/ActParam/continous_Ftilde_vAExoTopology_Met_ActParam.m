@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Met_Act(input)
+function phaseout = continous_Ftilde_vAExoTopology_Met_ActParam(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -14,7 +14,6 @@ numColPoints    = size(input.phase.state,1);
 vA      = 100*input.phase.control(:,1:NMuscles);
 aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD      = input.phase.control(:,end-(input.auxdata.numActiveDOFs-1):end);
 
 % Get states
 a      = input.phase.state(:,1:NMuscles);
@@ -25,10 +24,18 @@ exoMomentArms = zeros(numColPoints,3);
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
+
+torqueParamsIndex = input.auxdata.active.params;
+peakTorque = input.phase.parameter(1, torqueParamsIndex.peak_torque);
+peakTime = input.phase.parameter(1, torqueParamsIndex.peak_time);
+riseTime = input.phase.parameter(1, torqueParamsIndex.rise_time);
+fallTime = input.phase.parameter(1, torqueParamsIndex.fall_time);
+aD = getTorqueControlFromParameters(peakTorque, peakTime, riseTime, fallTime, numColPoints);
+
 if input.auxdata.active.hip
     exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
     if input.auxdata.numActiveDOFs > 1
-        aD_hip = aD(:,input.auxdata.active.hip);
+        % TODO
     else
         aD_hip = aD;
     end
@@ -36,7 +43,7 @@ end
 if input.auxdata.active.knee
     exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.active.knee);
     if input.auxdata.numActiveDOFs > 1
-        aD_knee = aD(:,input.auxdata.active.knee);
+        % TODO
     else
         aD_knee = aD;
     end
@@ -44,7 +51,7 @@ end
 if input.auxdata.active.ankle
     exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
     if input.auxdata.numActiveDOFs > 1
-        aD_ankle = aD(:,input.auxdata.active.ankle);
+        % TODO
     else
         aD_ankle = aD;
     end
@@ -84,8 +91,7 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff muscleData.err act1 act2];
-% phaseout.path = [Tdiff muscleData.err act1 act2 Texo_act_hip Texo_act_knee Texo_act_ankle];
+phaseout.path = [Tdiff muscleData.err act1 act2 Texo_act_hip Texo_act_knee Texo_act_ankle];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit
@@ -113,7 +119,7 @@ w_aT = 1000;
 w_a = 0.05;
 w_vA = 0.05;
 w_Edot = 1/(input.auxdata.model_mass*9.81*1.25);
-% phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2)+ w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
+% phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2) + w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2) + sum((vA/100).^2,2);
 
 
