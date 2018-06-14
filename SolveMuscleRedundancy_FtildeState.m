@@ -37,9 +37,6 @@
 %           OptInfo: output of GPOPS-II
 %           DatStore: structure with data used for solving the optimal
 %           control problem
-
-
-
 %
 % ----------------------------------------------------------------------- %
 %%
@@ -142,8 +139,8 @@ if ~isfield(Misc, 'parameterCalibrationData') || isempty(Misc.parameterCalibrati
     Misc.parameterCalibrationData = [];
 end
 % ParameterCalibration: option to pre-calibrate passive muscle properties
-if ~isfield(Misc, 'precalibrate_passive_moments') || isempty(Misc.precalibrate_passive_moments)
-   Misc.precalibrate_passive_moments = true; 
+if ~isfield(Misc, 'passive_precalibrate') || isempty(Misc.passive_precalibrate)
+   Misc.passive_precalibrate = false; 
 end
 
 % ----------------------------------------------------------------------- %
@@ -346,13 +343,14 @@ load Faparam.mat
 auxdata.Faparam = Faparam;
 
 % Pre-calibration to passive moments from Silder et al. 2007
-if strcmp(study{1}, 'ParameterCalibration') && Misc.precalibrate_passive_moments
-   calibratedModifiers = PassiveMomentCalibration(model_path, auxdata, DatStore);
+if strcmp(study{1}, 'ParameterCalibration') && Misc.passive_precalibrate
+   calibratedModifiers = PassiveMomentCalibration(model_path, auxdata, DatStore, Misc.parameterCalibrationTerms);
    
    % Update parameter structs
-   DatStore.params(9,:) = calibratedModifieres.lMo;
-   DatStore.params(10,:) = calibratedModifiers.lTs;
-   DatStore.params(7,:) = calibratedModifiers.e0;
+   indices = calibratedModifiers.indices;
+   DatStore.params(9,indices.lMo) = calibratedModifiers.lMo;
+   DatStore.params(10,indices.lTs) = calibratedModifiers.lTs;
+   DatStore.params(7,indices.e0) = calibratedModifiers.e0;
    auxdata.params = DatStore.params;
 end
 
@@ -406,54 +404,72 @@ bounds.phase.finalstate.lower = [actMin, Ffmin]; bounds.phase.finalstate.upper =
 bounds.phase.integral.lower = 0; 
 bounds.phase.integral.upper = 10000*(tf-t0);
 
-% Parameter bounds 
+% Parameters 
 if strcmp(study{1}, 'ParameterCalibration')
     parameterCalibrationIndices = struct();
     index = 1;
     params_lower = [];
     params_upper = [];
+    params_guess = [];
     musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
     for m = 1:length(musclesToCalibrate)
         muscIdx = find(contains(DatStore.MuscleNames, musclesToCalibrate{m}));
         paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
         for p = 1:length(paramsToCalibrate)
             if strcmp(paramsToCalibrate{p}, 'muscle_strain')
-                error(['Not currently supporting muscle strain in full parameter optimization, only ' ...
-                       'in passive calibration problem']);
+                warning(['Not currently supporting muscle strain in full parameter optimization, only ' ...
+                         'in passive calibration problem. Removing %s bound for %s...'], paramsToCalibrate{p}, musclesToCalibrate{m});
+                continue;
             elseif strcmp(paramsToCalibrate{p}, 'optimal_fiber_length')
-                currVal = auxdata.params(9, muscIdx);
+                preCalVal = auxdata.params(9,muscIdx);
             elseif strcmp(paramsToCalibrate{p}, 'tendon_slack_length')
-                currVal = auxdata.params(10, muscIdx);
+                preCalVal = auxdata.params(10,muscIdx);
             end
             
-            if 0.75*currVal < 0.75
-                currLower = 0.75;
+            if 0.75*preCalVal < 0.75
+                preCalVal_lower = 0.75;
             else
-                currLower = 0.75*currVal;
+                preCalVal_lower = 0.75*preCalVal;
             end
             
-            if 1.25*currVal > 1.25
-                currUpper = 1.25;
+            if 1.25*preCalVal > 1.25
+                preCalVal_upper = 1.25;
             else
-                currUpper = 1.25*currVal;
+                preCalVal_upper = 1.25*preCalVal;
             end
             
-            params_lower = [params_lower currLower];
-            params_upper = [params_upper currUpper];
-            
+            params_lower = [params_lower preCalVal_lower];
+            params_upper = [params_upper preCalVal_upper];
+            params_guess = [params_guess preCalVal];
+                       
             parameterCalibrationIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p}) = index;
+            index = index + 1;
+        end
+    end
+    
+    % Append additional scaling parameters for muscles without EMG data
+    muscsWithEMG = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r'};
+    for m = 1:length(emgCostMuscles)
+        if ~any(strcmp(muscsWithEMG, emgCostMuscles{m}))
+            params_lower = [params_lower 0];
+            params_upper = [params_upper 10];
+            params_guess = [params_guess 1];
+            
+            parameterCalibrationIndices.(emgCostMuscles{m}).emgScale = index;
             index = index + 1;
         end
     end
     
     bounds.parameter.lower = params_lower;
     bounds.parameter.upper = params_upper;
+    guess.parameter = params_guess;
     auxdata.parameterCalibrationIndices = parameterCalibrationIndices;
 end
 
 % Path constraints
 HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
+% matchEMG = zeros(1, auxdata.NMuscles);
 bounds.phase.path.lower = [ID_bounds,HillEquil]; bounds.phase.path.upper = [ID_bounds,HillEquil];
 
 % Eventgroup
@@ -468,21 +484,7 @@ guess.phase.time = DatStore.time;
 guess.phase.control = [DatStore.SoAct DatStore.SoRAct./150 zeros(N,auxdata.NMuscles)];
 % guess.phase.state =  [DatStore.SoAct 0.2*ones(N,auxdata.NMuscles)];
 guess.phase.state =  [DatStore.SoAct DatStore.SoAct];
-
 guess.phase.integral = 0;
-
-if strcmp(study{1}, 'ParameterCalibration')
-    params_guess = [];
-    musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
-    for m = 1:length(musclesToCalibrate)
-        paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
-        for p = 1:length(paramsToCalibrate)
-            params_guess = [params_guess 1.0];
-        end
-    end
-    
-    guess.parameter = params_guess;
-end
 
 % Spline structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
@@ -502,8 +504,9 @@ end
 % Spline calibration cost data
 if strcmp(study{1}, 'ParameterCalibration')
     % Create muscle name map to access correct data columns
-    keySet = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r','psoas_r'};
-    valueSet = {'gasmed_r','glmax2_r','recfem_r','semimem_r','soleus_r','tibant_r','vasmed_r','recfem_r'};
+    % Psoas and bifemsh muscles are matched to recfem EMG using an additional scaling factor
+    keySet = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r','psoas_r','bifemsh_r'};
+    valueSet = {'gasmed_r','glmax2_r','recfem_r','semimem_r','soleus_r','tibant_r','vasmed_r','recfem_r','recfem_r'};
     musc_map = containers.Map(keySet, valueSet);
     
     % Spline EMG data
@@ -629,6 +632,26 @@ OptInfo=output;
 % Retrieve splined muscle length and velocity curves
 for m = 1:auxdata.NMuscles
     [LMT(:,m),VMT(:,m),~] = SplineEval_ppuval(auxdata.LMTSpline(m),Time,1);
+end
+
+% Save calibrated parameter modifications
+if strcmp(study{1}, 'ParameterCalibration')
+    musclesToCalibrate = fieldnames(Misc.parameterCalibrationTerms);
+    for m = 1:length(musclesToCalibrate)
+        muscIdx = find(contains(DatStore.MuscleNames, musclesToCalibrate{m}));
+        paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
+        for p = 1:length(paramsToCalibrate)
+            if strcmp(paramsToCalibrate{p}, 'optimal_fiber_length')
+                idx = parameterCalibrationIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p});
+                OptInfo.paramCal.(musclesToCalibrate{m}).(paramsToCalibrate{p}) = output.result.solution.parameter(idx);
+            elseif strcmp(paramsToCalibrate{p}, 'tendon_slack_length')
+                idx = parameterCalibrationIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p});
+                OptInfo.paramCal.(musclesToCalibrate{m}).(paramsToCalibrate{p}) = output.result.solution.parameter(idx);
+            elseif strcmp(paramsToCalibrate{p}, 'muscle_strain')
+                OptInfo.paramCal.(musclesToCalibrate{m}).(paramsToCalibrate{p}) = DatStore.params(7, muscIdx);
+            end
+        end
+    end
 end
 
 % Get muscle data from DeGroote muscle model

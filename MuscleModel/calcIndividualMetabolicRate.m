@@ -95,9 +95,12 @@ lMT = NaN(numColPoints, numMuscles);
 for m = 1:numMuscles
     lMT(:, m) = ppval(auxdata.LMTSpline(m), Time);
 end
-[~, ~, F, Fiso] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde, ...
+muscleData = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde, ...
     lMT, auxdata.params, auxdata.Fvparam, auxdata.Fpparam, ...
     auxdata.Faparam);
+
+F = max(muscleData.FT, 0);
+Fiso = max(muscleData.FMltilde, 0);
 
 musc_energy_rate = NaN(numColPoints,numMuscles);
 for m = 1:numMuscles

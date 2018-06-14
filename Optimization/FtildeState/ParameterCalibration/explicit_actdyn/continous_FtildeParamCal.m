@@ -24,26 +24,24 @@ parameters = input.phase.parameter;
 % Modify muscle-tendon properties based on parameters
 terms = input.auxdata.parameterCalibrationTerms;
 paramIndices = input.auxdata.parameterCalibrationIndices;
-musclesToCalibrate = fieldnames(terms);
+musclesToCalibrate = fieldnames(paramIndices);
 MuscleNames = input.auxdata.MuscleNames;
 
 for m = 1:length(musclesToCalibrate)
-    if isfield(terms.(musclesToCalibrate{m}), 'params')
-        muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
-        paramsToCalibrate = terms.(musclesToCalibrate{m}).params;
-        for p = 1:length(paramsToCalibrate)
-            idx = paramIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p});
-            paramVal = parameters(1,idx);
-            switch paramsToCalibrate{p}
-                case 'optimal_fiber_length'
-                    params(9,muscIdx) = paramVal;
-                case 'tendon_slack_length'
-                    params(10,muscIdx) = paramVal;
-                case 'pennation_angle'
-                    params(11,muscIdx) = paramVal;
-                case 'muscle_strain'
-                    params(7,muscIdx) = paramVal;
-            end
+    muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
+    paramsToCalibrate = fieldnames(paramIndices.(musclesToCalibrate{m}));
+    for p = 1:length(paramsToCalibrate)
+        idx = paramIndices.(musclesToCalibrate{m}).(paramsToCalibrate{p});
+        paramVal = parameters(1,idx);
+        switch paramsToCalibrate{p}
+            case 'optimal_fiber_length'
+                params(9,muscIdx) = paramVal;
+            case 'tendon_slack_length'
+                params(10,muscIdx) = paramVal;
+            case 'pennation_angle'
+                params(11,muscIdx) = paramVal;
+            case 'muscle_strain'
+                error('Muscle strain calbiration not currently supported.');
         end
     end
 end
@@ -62,8 +60,6 @@ for dof = 1:Ndof
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff muscleData.err];
-
 % DYNAMIC CONSTRAINTS
 % Activation dynamics
 dadt = ones(numColPoints,NMuscles);
@@ -71,37 +67,49 @@ for m = 1:NMuscles
     dadt(:,m) = ActivationDynamics(e(:,m),a(:,m),tauAct(m),tauDeact(m),input.auxdata.b);
 end
 
-% Contraction dynamics is implicit
-phaseout.dynamics = [dadt dFtilde];
 
 % OBJECTIVE FUNCTION
-cal_integrand = 0;
-for m = 1:length(musclesToCalibrate)
-    if isfield(terms.(musclesToCalibrate{m}), 'costs')
-        muscIdx = find(contains(MuscleNames, musclesToCalibrate{m}));
+costMuscles = fieldnames(terms);
+EMGdiff = zeros(numColPoints, length(costMuscles));
+emgScaleCount = 0;
+for m = 1:length(costMuscles)
+    if isfield(terms.(costMuscles{m}), 'costs')
+        muscIdx = find(contains(MuscleNames, costMuscles{m}));
+        
+        if isfield(paramIndices.(costMuscles{m}), 'emgScale')
+            idx = paramIndices.(costMuscles{m}).emgScale;
+            emgScale = parameters(1,idx);
+            emgScaleCount = emgScaleCount + 1;
+        else
+            emgScale = 1;
+        end
 
-        calibrationCosts = terms.(musclesToCalibrate{m}).costs;
+        calibrationCosts = terms.(costMuscles{m}).costs;
         for c = 1:length(calibrationCosts)
             switch calibrationCosts{c}
                 case 'emg'
-                    err = (e(:,muscIdx) - splinestruct.EMG(:,muscIdx));
+                    EMGdiff(:,m) = (e(:,muscIdx) - emgScale*splinestruct.EMG(:,muscIdx));
                 case 'fiber_length'
-                    err = (muscleData.lMtilde(:,muscIdx) - splinestruct.FL(:,muscIdx));
+                    error('Fiber length cost not currently supported.');
                 case 'fiber_velocity'
-                    err = (muscleData.vMtilde(:,muscIdx) - splinestruct.FV(:,muscIdx));   
+                    error('Fiber velocity cost not currently supported.');  
             end
-            cal_integrand = cal_integrand + sum(err.^2,2);
-        end
+        end        
     end
 end
 
-% Penalty on parameters deviating from nominal
-param_dev = 4*(parameters(1,:)-1).^2;
+% Penalty on parameters deviating from nominal (except scale factors)
+param_dev = 4*(parameters(1,1:(end-emgScaleCount))-1).^2;
 
+
+% Outputs
+phaseout.path = [Tdiff muscleData.err];
+% Contraction dynamics is implicit
+phaseout.dynamics = [dadt dFtilde];
 w1 = 1000;
 wAct = 0.1;
 wParam = 0.1;
-phaseout.integrand = w1.*sum(aT.^2,2) + cal_integrand + wAct*sum(a.^2,2) + wParam*sum(param_dev,2);
+phaseout.integrand = w1.*sum(aT.^2,2) + sum(EMGdiff.^2,2) + wAct*sum(a.^2,2); %+ wParam*sum(param_dev,2)
 
 
 

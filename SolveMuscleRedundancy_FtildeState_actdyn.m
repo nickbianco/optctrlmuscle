@@ -61,10 +61,8 @@ switch study{1}
         tag = '';
     case 'SoftExosuitDesign'
         tag = ['Exo' study{2}];
-    case 'ISB2017'
-        tag = ['ISB' study{2}];
     otherwise
-        tag = '';
+        error('Study not recognized')
 end
 % Cost Function
 if ~isfield(Misc,'costfun') || isempty(Misc.costfun)
@@ -118,21 +116,9 @@ end
 if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
    Misc.Mesh_Frequency=100;
 end
-% Which study?
-if ~isfield(Misc,'study') || isempty(Misc.study)
-   Misc.study='DeGroote2016';
-end
 % Device force level for Quinlivan study
 if ~isfield(Misc,'exo_force_level') || isempty(Misc.exo_force_level)
    Misc.exo_force_level = -1;          
-end
-% Clutched spring stiffness for Collins study
-if ~isfield(Misc, 'ankle_clutched_spring_stiffness') || isempty(Misc.ankle_clutched_spring_stiffness)
-    Misc.ankle_clutched_spring_stiffness = -1;
-end
-% Fixed spring rest length for Collins study
-if ~isfield(Misc, 'fixed_rest_length') || isempty(Misc.fixed_rest_length)
-    Misc.fixed_rest_length = true; 
 end
 % Variable tendon stiffness
 if ~isfield(Misc, 'tendonStiffnessCoeff') || isempty(Misc.tendonStiffnessCoeff)
@@ -178,33 +164,18 @@ end
 if ~isfield(Misc, 'mult_controls') || isempty(Misc.mult_controls)
    Misc.mult_controls = false; 
 end
-% Quinlivan: shift exoskeleton peaks to match ID peaks
+% ExoTopology: option to fix gains on experimental torque controls to be
+% the same across DOFs
+if ~isfield(Misc, 'same_torque_gain') || isempty(Misc.same_torque_gain)
+   Misc.same_torque_gain = false; 
+end
+% Shift prescribed exoskeleton torque peaks to match ID peaks
 if ~isfield(Misc, 'shift_exo_peaks') || isempty(Misc.shift_exo_peaks)
    Misc.shift_exo_peaks = false; 
 end
 
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
-if strcmp(study{1},'SoftExosuitDesign') && ~strcmp(study{2},'Topology')
-    errmsg = [study{1} ': must specify force level'];
-    assert(Misc.exo_force_level ~= -1,errmsg)
-end
-
-if ~strcmp(study{1},'SoftExosuitDesign') && strcmp(study{2},'Collins2015')
-   errmsg = [study{1} '/' study{2} ': exosuit force level unused'];
-   assert(Misc.exo_force_level == -1,errmsg)
-end
-
-if ~strcmp(study{2},'Collins2015')
-    errmsg = [study{2} ': spring stiffness level unused'];
-    assert(Misc.ankle_clutched_spring_stiffness == -1, errmsg)
-end
-
-if ~strcmp(study{2},'Quinlivan2017')
-    errmsg = [study{2} ': shifting exoskeleton force peaks unused'];
-    assert(Misc.shift_exo_peaks == false, errmsg)
-end
-
 if ~strcmp(study{2},'Topology')
     errmsg = [study{2} ': active device DOFs unused'];
     assert(isempty(Misc.activeDOFs), errmsg)
@@ -327,44 +298,6 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
 auxdata.metabolicParams = DatStore.metabolicParams; % Parameters for calculating metabolic cost
-
-% Collins et al. 2015 study, optimizing for spring stiffness
-if strcmp(study{2}, 'Collins2015')
-    
-    % Find clutched spring DOFs
-    % TODO: support separately clutching left and right leg.
-    auxdata.clutched_spring_dofs = strmatch('ankle_angle',DatStore.DOFNames);
-      
-    % Find fixed rest length based on first ankle angle peak after
-    % heel strike
-    if Misc.fixed_rest_length
-        errmsg = 'Fixing spring stiffness only supported for one DOF assistance';
-        assert(length(auxdata.clutched_spring_dofs)==1,errmsg)
-        
-        % Flip sign to match convention in Collins et al. 2015 study
-        ankleAngle = -DatStore.q_exp(:,auxdata.clutched_spring_dofs);
-        
-        % To set fixed rest length, find first ankle angle peak 
-        % within first ~40% of gait cycle
-        percentGC = 0.4;
-        [restLength,firstPeakIdx] = max(ankleAngle(1:floor(percentGC*length(ankleAngle))));
-        auxdata.rest_length_first_peak = DatStore.time(firstPeakIdx);
-        
-        % Find where the rest length is reached after spring recoil
-        [~,minIdx] = min(ankleAngle);
-        [~,maxIdx] = max(ankleAngle);
-        [~,idx] = min(abs(restLength-ankleAngle(minIdx:maxIdx)));
-        restLengthAfterRecoilIdx = idx+minIdx-1;
-        auxdata.rest_length_after_recoil = DatStore.time(restLengthAfterRecoilIdx);
-        
-        % Save rest length (in radians)
-        auxdata.rest_length = -restLength * (pi/180);
-        fprintf('Spring is active in [%f, %f], with rest length %f.\n', ...
-            auxdata.rest_length_first_peak, ...
-            auxdata.rest_length_after_recoil, ...
-            -restLength);
-    end
-end
 
 % ExoTopology study: handling possible active + passive device cases
 % Create indicies for parameter array
@@ -660,7 +593,7 @@ auxdata.Fpparam = [pp1;pp2;ones(1,length(pp1))*Misc.tendonStiffnessCoeff];
 
 % Solve static optimization problem with devices for ExoTopology study to
 % improve quality of initial guesses
-if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'ActParam')
+if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'ActParam') && ~strcmp(Misc.subcase, 'Exp') && ~strcmp(Misc.subcase, 'FitOpt')
     DatStore = SolveStaticOptimization_ExoTopology(DatStore, auxdata, Misc);
 end
 
@@ -689,21 +622,17 @@ aTmin = -1*ones(1,auxdata.Ndof);
 aTmax = 1*ones(1,auxdata.Ndof);
 aDmin = zeros(1, auxdata.numActiveDOFs); 
 aDmax = ones(1, auxdata.numActiveDOFs);
-switch study{2}
-    case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
+if strcmp(study{2},'Topology')
+    if auxdata.hasActiveDevice && ~strcmp(Misc.subcase, 'ActParam') && ~strcmp(Misc.subcase, 'Exp') && ~strcmp(Misc.subcase, 'FitOpt')
         control_bounds_lower = [vAmin aTmin dFMin aDmin];
         control_bounds_upper = [vAmax aTmax dFMax aDmax];
-    case 'Topology'
-        if auxdata.hasActiveDevice && ~strcmp(Misc.subcase, 'ActParam')
-            control_bounds_lower = [vAmin aTmin dFMin aDmin];
-            control_bounds_upper = [vAmax aTmax dFMax aDmax];
-        else
-            control_bounds_lower = [vAmin aTmin dFMin];
-            control_bounds_upper = [vAmax aTmax dFMax];
-        end
-    otherwise
+    else
         control_bounds_lower = [vAmin aTmin dFMin];
         control_bounds_upper = [vAmax aTmax dFMax];
+    end
+else
+    control_bounds_lower = [vAmin aTmin dFMin];
+    control_bounds_upper = [vAmax aTmax dFMax];
 end
 bounds.phase.control.lower = control_bounds_lower; 
 bounds.phase.control.upper = control_bounds_upper;
@@ -729,50 +658,16 @@ bounds.phase.integral.lower = 0;
 bounds.phase.integral.upper = 10000*(tf-t0);
 
 % Parameter bounds
-switch study{2}
-    case 'HipAnkle'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
-    case 'HipKneeAnkle'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
-    case 'HipExtHipAbd'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
-    case 'HipAnkleMass'
-        bounds.parameter.lower = -1.0;
-        bounds.parameter.upper = 1.0;
-    case 'Collins2015'
-        stiffness_lower = 0;
-        stiffness_upper = 1;
-        if Misc.ankle_clutched_spring_stiffness ~= -1
-            assert(Misc.ankle_clutched_spring_stiffness >= 0 && ...
-                   Misc.ankle_clutched_spring_stiffness <= 1);
-            stiffness_lower = Misc.ankle_clutched_spring_stiffness;
-            stiffness_upper = Misc.ankle_clutched_spring_stiffness;
-        end
-        rest_length_lower = -0.5;
-        rest_length_upper = 0.5;
-        if Misc.fixed_rest_length
-            rest_length_lower = auxdata.rest_length;
-            rest_length_upper = auxdata.rest_length;
-        end
-        bounds.parameter.lower = [stiffness_lower, rest_length_lower];
-        bounds.parameter.upper = [stiffness_upper, rest_length_upper];
-    case 'Quinlivan2017'
-        force_level_lower = 0;
-        force_level_upper = 10;
-        if Misc.exo_force_level ~= -1
-            assert(Misc.exo_force_level >= 0 && ...
-                   Misc.exo_force_level <= 10);
-            force_level_lower = Misc.exo_force_level;
-            force_level_upper = Misc.exo_force_level;
-        end
-        bounds.parameter.lower = force_level_lower;
-        bounds.parameter.upper = force_level_upper;
-    case 'Topology'
+if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'FitOpt')
+    auxdata.same_torque_gain = false;
+    if strcmp(Misc.subcase, 'Exp') && ~isempty(Misc.fixMomentArms)
+        auxdata.same_torque_gain = true;
+        bounds.parameter.lower = 0;
+        bounds.parameter.upper = 1;
+    else
         bounds.parameter.lower = auxdata.paramsLower;
         bounds.parameter.upper = auxdata.paramsUpper;
+    end
 end
 
 % Path constraints
@@ -791,7 +686,6 @@ bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
 %     bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper,exoTorque_bounds_upper];
 % end
 
-
 % Eventgroup
 % Impose mild periodicity
 pera_lower = -1 * ones(1, auxdata.NMuscles);
@@ -801,294 +695,131 @@ perFtilde_upper = 1*ones(1,auxdata.NMuscles);
 bounds.eventgroup.lower = [pera_lower perFtilde_lower]; 
 bounds.eventgroup.upper = [pera_upper perFtilde_upper];
 
-% Initial guess
+% Initial guesses
+
+% Time guess
 N = length(DatStore.time);
 guess.phase.time = DatStore.time;
-switch study{2}
-    case {'HipAnkle','HipKneeAnkle','HipExtHipAbd'}
-        control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles) 0.5*ones(N,1)];
-    case 'Topology' 
-        if auxdata.hasActiveDevice && ~strcmp(Misc.subcase, 'ActParam')
-            control_guess = [zeros(N,auxdata.NMuscles) DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles) DatStore.SO_ExoAct];
-        elseif strcmp(Misc.subcase, 'ActParam')
-            control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
-        else
-            control_guess = [zeros(N,auxdata.NMuscles) DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles)];
-        end
-    otherwise
+
+% Control guess
+if strcmp(study{2},'Topology')
+    if auxdata.hasActiveDevice && ~strcmp(Misc.subcase, 'ActParam') && ~strcmp(Misc.subcase, 'Exp') && ~strcmp(Misc.subcase, 'FitOpt')
+        control_guess = [zeros(N,auxdata.NMuscles) DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles) DatStore.SO_ExoAct];
+    elseif strcmp(Misc.subcase, 'ActParam') || strcmp(Misc.subcase, 'Exp') || strcmp(Misc.subcase, 'FitOpt')
         control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
+    else
+        control_guess = [zeros(N,auxdata.NMuscles) DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles)];
+    end
+else
+    control_guess = [zeros(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.01*ones(N,auxdata.NMuscles)];
 end
 guess.phase.control = control_guess;
 
-switch study{2}
-    case 'Topology'
-        if strcmp(Misc.subcase, 'ActParam')
-            guess.phase.state =  [0.2*ones(N,auxdata.NMuscles) 0.2*ones(N,auxdata.NMuscles)];
-        else
-            guess.phase.state =  [DatStore.SO_MAct 0.2*ones(N,auxdata.NMuscles)];
-        end
-    otherwise
+% State guess
+if strcmp(study{2},'Topology')
+    if strcmp(Misc.subcase, 'ActParam') || strcmp(Misc.subcase, 'Exp') || strcmp(Misc.subcase, 'FitOpt')
         guess.phase.state =  [0.2*ones(N,auxdata.NMuscles) 0.2*ones(N,auxdata.NMuscles)];
+    else
+        guess.phase.state =  [DatStore.SO_MAct 0.2*ones(N,auxdata.NMuscles)];
+    end
+else
+    guess.phase.state =  [0.2*ones(N,auxdata.NMuscles) 0.2*ones(N,auxdata.NMuscles)];
 end
+
+% Integral guess
 guess.phase.integral = 0;
-switch study{2}
-    case 'HipAnkle'
-        guess.parameter = 0;
-    case 'HipKneeAnkle'
-        guess.parameter = 0;
-    case 'HipExtHipAbd'
-        guess.parameter = 0;
-    case 'HipAnkleMass'
-        guess.parameter = 0;
-    case 'Collins2015'
-        guess.parameter = [0.5, 0];
-    case 'Quinlivan2017'
-        guess.parameter = 4;
-    case 'Topology'
-       if auxdata.hasPassiveDevice
-%            guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
-           guess.parameter = DatStore.SO_parameter;
-       elseif strcmp(Misc.subcase, 'ActParam')
-           guess.parameter = [zeros(1,auxdata.numExoParams-4) 0.2*ones(1,4)];
-       else
-%            guess.parameter = zeros(1,auxdata.numExoParams);
-           guess.parameter = DatStore.SO_parameter;
-       end
+
+% Parameter guess
+if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'FitOpt')
+    if auxdata.hasPassiveDevice
+        % guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
+        guess.parameter = DatStore.SO_parameter;
+    elseif strcmp(Misc.subcase, 'ActParam')
+        guess.parameter = [zeros(1,auxdata.numExoParams-4) 0.2*ones(1,4)];
+    elseif strcmp(Misc.subcase, 'Exp')
+        if ~isempty(Misc.fixMomentArms)
+            guess.parameter = 0.5;
+        else
+            guess.parameter = (auxdata.paramsLower+auxdata.paramsUpper)/2;
+        end
+    else
+        % guess.parameter = zeros(1,auxdata.numExoParams);
+        guess.parameter = DatStore.SO_parameter;
+    end
 end
 
 % Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
 T_exo_shift = DatStore.T_exo; % Temp variable for shifting data
-DatStore.p_linreg = zeros(2,auxdata.Ndof);
 
-% Reproduce Quinlivan et al. 2017 study
-if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
+if strcmp(study{2},'Topology') && strcmp(Misc.subcase, 'Exp')
     % Exosuit moment curves
     currentFile = mfilename('fullpath');
     [currentDir,~] = fileparts(currentFile);
     ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
     exoTime = ExoCurves.time;
-    % Peaks are body mass normalized so multiply by model mass
-    exoAnkleMomentPeaks = ExoCurves.am_peak * model_mass;
-    exoAnkleNormalizedMoment = ExoCurves.am_norm;
-    exoHipMomentPeaks = ExoCurves.hm_peak * model_mass;
-    exoHipNormalizedMoment = ExoCurves.hm_norm;
+    exoNormalizedMoment = ExoCurves.hm_norm;
     
-    % Interpolate exosuit moments to match data
-    switch study{1}
-        case 'SoftExosuitDesign'
-            if Misc.exo_force_level
-                exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
-                exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
-                for dof = 1:auxdata.Ndof
-                    if strfind(DatStore.DOFNames{dof},'ankle_angle')
-                        % Negative to match ankle_angle_r coord convention
-                        DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time);
-                    elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
-                        % Positive to match hip_flexion_r coord convention
-                        DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
-                    end
+    for i = 1:length(Misc.activeDOFs)
+        dofInfo = split(Misc.activeDOFs{i},'/');
+        for dof = 1:auxdata.Ndof
+                        
+            if contains(DatStore.DOFNames{dof}, dofInfo{1})
+                
+                switch dofInfo{1}
+                    case 'hip'
+                        signMoment = sign(auxdata.paramsUpper(auxdata.active.hip));
+                    case 'knee'
+                        signMoment = auxdata.kneeAngleSign*sign(auxdata.paramsUpper(auxdata.active.knee));
+                    case 'ankle'
+                        signMoment = sign(auxdata.paramsUpper(auxdata.active.ankle));
                 end
-            end
-        case 'ISB2017'
-            % Normalized curves at hip and ankle
-            % Linear regression on moment peaks for parameter optimization
-            %
-            % NOTE: interpolation scheme assumes that time range provided
-            %       in problem represents a full gait cycle
-            % TODO: find a way make this generic
-            if Misc.exo_force_level
-                for dof = 1:auxdata.Ndof
-                    if strfind(DatStore.DOFNames{dof},'ankle_angle')
-                        % Negative to match ankle_angle_r coord convention
-                        DatStore.T_exo(:,dof) = -interp1(linspace(0,100,length(exoTime)), ...
-                            exoAnkleNormalizedMoment, ...
+                
+                DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
+                            exoNormalizedMoment, ...
                             linspace(0,100,length(DatStore.time)));
-                        
-                        if Misc.shift_exo_peaks
-                            [~,exo_idx] = max(-DatStore.T_exo(:,dof));
-                            [~,exp_idx] = max(-DatStore.T_exp(:,dof));
-                            shift_idx = abs(exp_idx - exo_idx);
-                            T_exo_shift(:,dof) = [zeros(shift_idx,1); DatStore.T_exo(1:end-shift_idx,dof)];
-                            
-                            DatStore.T_exo(:,dof) = T_exo_shift(:,dof);
-                        end
-                        
-                        X = 1:4;
-                        Y = exoAnkleMomentPeaks(1:4);
-                        DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
-                        % Output peak assistive force at ankle in %BW to use
-                        % for abscissa in plots.
-                        disp('ISB2017/Quinlivan2017 force levels (%BW):');
-                        fprintf('slope: %f; intercept: %f\n', ...
-                            DatStore.p_linreg(1,dof) / model_mass, ...
-                            DatStore.p_linreg(2,dof) / model_mass);
-                        for fl = 1:10
-                            fprintf('force level %i: %f\n', fl, ...
-                                (DatStore.p_linreg(1,dof)*fl + ...
-                                DatStore.p_linreg(2,dof)) / model_mass);
-                        end
-                        for mp = 1:length(ExoCurves.am_peak)
-                            fprintf('exo ankle moment peaks mass-norm %i: %f\n', ...
-                                    mp, ExoCurves.am_peak(mp));
-                        end
-                    elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
-                        % Positive to match hip_flexion_r coord convention
-                        DatStore.T_exo(:,dof) = interp1(linspace(0,100,length(exoTime)), ...
-                            exoHipNormalizedMoment, ...
-                            linspace(0,100,length(DatStore.time)));
-                        
-                        if Misc.shift_exo_peaks 
-                            [~,exo_idx] = max(DatStore.T_exo(:,dof));
-                            [~,exp_idx] = max(DatStore.T_exp(:,dof));
-                            shift_idx = abs(exp_idx - exo_idx);
-                            T_exo_shift(:,dof) = [zeros(shift_idx,1); DatStore.T_exo(1:end-shift_idx,dof)];
-                            
-                            DatStore.T_exo(:,dof) = T_exo_shift(:,dof);
-                        end
-                        
-                        X = 1:4;
-                        Y = exoHipMomentPeaks(1:4);
-                        DatStore.p_linreg(:,dof) = polyfit(X,Y,1)';
-                    end
+                [~,exo_idx] = max(DatStore.T_exo(:,dof));
+                [~,exp_idx] = max(signMoment*DatStore.T_exp(:,dof));
+                
+                shift_dir = sign(exp_idx - exo_idx);
+                shift_idx = abs(exp_idx - exo_idx);
+                
+                if shift_dir > 0 
+                    T_exo_shift(:,dof) = [zeros(shift_idx,1); DatStore.T_exo(1:end-shift_idx,dof)];
+                elseif shift_dir <= 0
+                    T_exo_shift(:,dof) = [DatStore.T_exo(shift_idx:end,dof); zeros(shift_idx-1,1)];
                 end
-            end
-            auxdata.p_linreg = DatStore.p_linreg;
-    end   
-end
-
-% "Tradeoff" struct
-%  +/- 1 for the two joints you are investigating
-%  zeros for everything else
-DatStore.tradeoff = zeros(auxdata.Ndof,1);
-
-% Given one actuator, compare tradeoff between hip flexion and ankle 
-% plantarflexion assistance
-DatStore.Fopt_exo = zeros(auxdata.Ndof,1);
-if strcmp(study{2},'HipAnkle') 
-    % Exosuit moment curves
-    currentFile = mfilename('fullpath');
-    [currentDir,~] = fileparts(currentFile);
-    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
-    % Peaks are body mass normalized so multiply by model mass
-    exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
-
-    % Interpolate exosuit moments to match data
-    if Misc.exo_force_level    
-        exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
-        for dof = 1:auxdata.Ndof
-            if strfind(DatStore.DOFNames{dof}, 'ankle_angle')
-                % Negative to match ankle_angle_r coord convention
-                DatStore.Fopt_exo(dof) = -exoForce;
-                DatStore.tradeoff(dof) = -1;
-            elseif strfind(DatStore.DOFNames{dof}, 'hip_flexion')
-                % Positive to match hip_flexion_r coord convention
-                DatStore.Fopt_exo(dof) = exoForce;
-                DatStore.tradeoff(dof) = 1;
+                
+                DatStore.T_exo(:,dof) = T_exo_shift(:,dof);
             end
         end
     end
     
-    auxdata.Fopt_exo = DatStore.Fopt_exo;
-    auxdata.tradeoff = DatStore.tradeoff;
 end
 
-% Given one actuator, compare tradeoff between hip flexion and ankle 
-% plantarflexion assistance. Also allow moment arm at knee.
-DatStore.Fopt_exo_knee = zeros(auxdata.Ndof,1);
-if strcmp(study{2},'HipKneeAnkle') 
-    % Exosuit moment curves
-    currentFile = mfilename('fullpath');
-    [currentDir,~] = fileparts(currentFile);
-    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
-    % Peaks are body mass normalized so multiply by model mass
-    exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
-
-    % Interpolate exosuit moments to match data
-    if Misc.exo_force_level    
-        exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
+if strcmp(study{2},'Topology') && strcmp(Misc.subcase, 'FitOpt')
+    exoTime = Misc.exoTime;
+    exoApproximatedMoment = Misc.exoApproximatedMoment;
+    
+    for i = 1:length(Misc.activeDOFs)
+        dofInfo = split(Misc.activeDOFs{i},'/');
         for dof = 1:auxdata.Ndof
-            if strfind(DatStore.DOFNames{dof},'ankle_angle')
-                % Negative to match ankle_angle_r coord convention
-                DatStore.Fopt_exo(dof) = -exoForce;
-                DatStore.tradeoff(dof) = -1;
-            elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
-                % Positive to match hip_flexion_r coord convention
-                DatStore.Fopt_exo(dof) = exoForce;
-                DatStore.tradeoff(dof) = 1;
-            elseif strfind(DatStore.DOFNames{dof},'knee_angle')
-                DatStore.Fopt_exo_knee(dof) = exoForce;
+            if contains(DatStore.DOFNames{dof}, dofInfo{1})
+                switch dofInfo{1}
+                    case 'hip'
+                        signMoment = sign(auxdata.paramsUpper(auxdata.active.hip));
+                    case 'knee'
+                        signMoment = auxdata.kneeAngleSign*sign(auxdata.paramsUpper(auxdata.active.knee));
+                    case 'ankle'
+                        signMoment = sign(auxdata.paramsUpper(auxdata.active.ankle));
+                end
+                
+                DatStore.T_exo(:,dof) = signMoment*interp1(linspace(0,100,length(exoTime)), ...
+                    exoApproximatedMoment, ...
+                    linspace(0,100,length(DatStore.time)));
             end
         end
     end
-    
-    auxdata.Fopt_exo = DatStore.Fopt_exo;
-    auxdata.Fopt_exo_knee = DatStore.Fopt_exo_knee;
-    auxdata.tradeoff = DatStore.tradeoff;
-end
-
-% Given one actuator, compare tradeoff between hip extension and hip 
-% abduction assistance
-if strcmp(study{2},'HipExtHipAbd') 
-    % Exosuit moment curves
-    currentFile = mfilename('fullpath');
-    [currentDir,~] = fileparts(currentFile);
-    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
-    % Peaks are body mass normalized so multiply by model mass
-    exoAnkleForcePeaks = ExoCurves.af_peak * model_mass;
-
-    % Interpolate exosuit moments to match data
-    if Misc.exo_force_level    
-        exoForce = exoAnkleForcePeaks(Misc.exo_force_level);
-        for dof = 1:auxdata.Ndof
-            if strfind(DatStore.DOFNames{dof},'hip_flexion')
-                % Negative to match hip_flexion_r coord convention
-                DatStore.Fopt_exo(dof) = -exoForce;
-                DatStore.tradeoff(dof) = 1;
-            elseif strfind(DatStore.DOFNames{dof},'hip_adduction')
-                % Negative to match hip_adduction_r coord convention
-                DatStore.Fopt_exo(dof) = -exoForce;
-                DatStore.tradeoff(dof) = -1;
-            end
-        end
-    end
-    
-    auxdata.Fopt_exo = DatStore.Fopt_exo;
-    auxdata.tradeoff = DatStore.tradeoff;
-end
-
-% Given one actuator, compare tradeoff between hip flexion and ankle 
-%  plantarflexion assistance with addition of device mass
-if strcmp(study{2},'HipAnkleMass') 
-    
-    % Exosuit moment curves
-    currentFile = mfilename('fullpath');
-    [currentDir,~] = fileparts(currentFile);
-    ExoCurves = load(fullfile(currentDir,'Data','Quinlivan2017','ExoCurves.mat'));
-    exoTime = ExoCurves.time;
-    % Peaks are body mass normalized so multiply by model mass
-    exoAnkleMomentPeaks = ExoCurves.am_peak * model_mass;
-    exoAnkleNormalizedMoment = ExoCurves.am_norm;
-    exoHipMomentPeaks = ExoCurves.hm_peak * model_mass;
-    exoHipNormalizedMoment = ExoCurves.hm_norm;
- 
-    % Interpolate exosuit moments to match data
-    if Misc.exo_force_level    
-        exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
-        exoHipMoment = exoHipMomentPeaks(Misc.exo_force_level) * exoHipNormalizedMoment;
-        for dof = 1:auxdata.Ndofdoit
-            if strfind(DatStore.DOFNames{dof},'ankle_angle')
-                % Negative to match ankle_angle_r coord convention
-                DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time); 
-                DatStore.tradeoff(dof) = -1;
-            elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
-                % Positive to match hip_flexion_r coord convention
-                DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
-                DatStore.tradeoff(dof) = 1;
-            end
-        end
-    end  
-    auxdata.tradeoff = DatStore.tradeoff;
 end
 
 % Spline structures
@@ -1112,14 +843,14 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.nlp.ipoptoptions.tolerance = 10^(-4);
+setup.nlp.ipoptoptions.tolerance = 1e-3;
 setup.nlp.ipoptoptions.maxiterations = 10000;
 setup.derivatives.supplier = 'sparseCD';
 setup.derivatives.derivativelevel = 'first';
 setup.derivatives.dependencies = 'sparse';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-4;
+setup.mesh.tolerance = 1e-6;
 setup.mesh.maxiterations = 20;
 setup.mesh.colpointsmin = 5;
 setup.mesh.colpointsmax = 10;
@@ -1256,16 +987,6 @@ MuscleData = DeGroote2016Muscle_FtildeState(MActivation, TForcetilde, ...
     dTForcetilde, LMT, VMT, auxdata.params, auxdata.Fvparam, auxdata.Fpparam, ... 
     auxdata.Faparam);
 
-if strcmp(study{1},'ISB2017')
-    if strcmp(study{2},'Quinlivan2017')
-        DatStore.ExoTorques_Act = calcExoTorques_FtildeISBQuinlivan2017(...
-            OptInfo, DatStore);
-    elseif strcmp(study{2},'Collins2015')
-        DatStore.ExoTorques_Act = calcExoTorques_FtildeISBCollins2015(...
-            OptInfo, DatStore);
-    end
-end
-
 if strcmp(study{2},'Topology')
     if strcmp(Misc.subcase, 'Act')
         [DatStore.ExoTorques_Act, DatStore.MomentArms_Act] = ...
@@ -1281,6 +1002,12 @@ if strcmp(study{2},'Topology')
     elseif strcmp(Misc.subcase, 'ActParam')
         [DatStore.ExoTorques_Act, DatStore.MomentArms_Act] = ...
             calcExoTorques_Ftilde_vAExoTopology_ActParam(OptInfo, DatStore);
+    elseif strcmp(Misc.subcase, 'Exp')
+        [DatStore.ExoTorques_Act, DatStore.MomentArms_Act] = ...
+            calcExoTorques_Ftilde_vAExoTopology_Exp(OptInfo, DatStore);
+    elseif strcmp(Misc.subcase, 'FitOpt')
+        [DatStore.ExoTorques_Act] = ...
+            calcExoTorques_Ftilde_vAExoTopology_FitOpt(OptInfo, DatStore);
     end
 end
 

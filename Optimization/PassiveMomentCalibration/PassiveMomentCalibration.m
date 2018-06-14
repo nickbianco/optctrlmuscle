@@ -1,4 +1,4 @@
-function [calibratedModifiers] = PassiveMomentCalibration(model_fpath, auxdata, DatStore)
+function [calibratedModifiers] = PassiveMomentCalibration(model_fpath, auxdata, DatStore, paramsToCal)
 
 import org.opensim.modeling.*
 model = Model(model_fpath);
@@ -21,11 +21,50 @@ M = createMomentArray(M_Silder2007);
 [q, u] = createJointAngleVelocityArrays(q_Silder2007, allCoords);
 [B, lMT] = getLengthsMomentArms(model, q, u, DatStore.DOFNames, DatStore.MuscleNames);
 
+% Get info about muscles to calibrate
+muscles = fieldnames(paramsToCal);
+lMo = [];
+lTs = [];
+e0 = [];
+for m = 1:length(muscles)
+   idx = find(contains(DatStore.MuscleNames, muscles{m}));
+   params = paramsToCal.(muscles{m}).params;   
+   for p = 1:length(params)
+      switch params{p}
+          case 'optimal_fiber_length'
+              lMo = [lMo idx];
+          case 'tendon_slack_length'
+              lTs = [lTs idx];
+          case 'muscle_strain'
+              e0 = [e0 idx];
+      end
+   end 
+end
+indices = struct();
+indices.lMo = lMo;
+indices.lTs = lTs;
+indices.e0 = e0;
+numlMo = length(lMo);
+numlTs = length(lTs);
+nume0 = length(e0);
+indices.numlMo = numlMo;
+indices.numlTs = numlTs;
+indices.nume0 = nume0;
+auxdata.indices = indices;
+
 % Set up calibration optimization problem
-numMuscles = size(B, 3);
-x0 = ones(3*numMuscles, 1);
+numParams = numlMo + numlTs + nume0;
+x0 = ones(numParams, 1);
 lb = 0.75*x0;
 ub = 1.25*x0;
+
+% Rectus femoris passive muscle properties tend to be too stiff, even
+% after calibration -- these modified bounds attempt to prevent this.
+RFidx = find(contains(muscles,'rect_fem_r'));
+lb(RFidx) = 1.0;
+lb(RFidx+length(muscles)) = 1.0;
+lb(RFidx+(2*length(muscles))) = 1.0;
+
 options = optimoptions('fmincon', ...
                        'Display','iter', ...
                        'Algorithm','sqp', ...
@@ -41,22 +80,25 @@ options = optimoptions('fmincon', ...
 %
 % Below are the ranges of e0 for the same range of x, [0.75 1.25], and the 
 % necessary linear equation coefficient values.
+% e0: [0.6 0.75]    --> m = 0.3, b = 0.375
+% e0: [0.6 0.8]     --> m = 0.4, b = 0.3
+% e0: [0.6 0.7]     --> m = 0.2, b = 0.45
 % e0: [0.55 0.65]   --> m = 0.2, b = 0.4
 % e0: [0.525 0.675] --> m = 0.3, b = 0.3
 % e0: [0.5 0.7]     --> m = 0.4, b = 0.2
 m = 0.3;
-b = 0.3;
+b = 0.375;
 auxdata.e0LinCoefs.m = m;
 auxdata.e0LinCoefs.b = b;
  
 % Choose whether or not to use rigid tendon assumption
-% (compliant tendon optimization doesn't work, so not really a choice...)
+% (compliant tendon optimization doesn't work yet, so not really a choice...)
 isRigidTendon = true;
 
 % Optimize
 [x, res] = fmincon(@(x) obj(x, M, B, lMT, auxdata, isRigidTendon), x0, ...
                    [],[],[],[], lb, ub, ...
-                   @(x) nonlincon(x, lMT, auxdata), options);
+                   @(x) nonlincon(x, lMT, B, M, auxdata, isRigidTendon), options);
 
 % Get results
 TendonForce = getForce(x, lMT, auxdata, isRigidTendon);
@@ -67,10 +109,15 @@ end
 M_nz = M(M~=0);
 MuscleMoments_nz = MuscleMoments(M~=0);
 
+% create muscle strain modifiers
+cal_e0 = m*x((numlMo+numlTs + 1):(numParams)) + b*ones(nume0,1);
+mod_e0 = ones(nume0,1) + ((cal_e0-0.6)/0.6);
+
 % Return calibrated parameter modifiers
-calibratedModifiers.lMo = x(1:numMuscles);
-calibratedModifiers.lTs = x((numMuscles+1):(2*numMuscles));
-calibratedModifiers.e0  = m*x((2*numMuscles + 1):(3*numMuscles)) + b*ones(numMuscles,1);
+calibratedModifiers.indices = indices;
+calibratedModifiers.lMo = x(1:numlMo);
+calibratedModifiers.lTs = x((numlMo+1):(numlMo+numlTs)); 
+calibratedModifiers.e0 = mod_e0;
 
 end
 
@@ -123,11 +170,11 @@ Tmuscs_nz = Tmuscs(M~=0);
 Tdiff = M_nz - Tmuscs_nz;
 
 % Return scalar objective
-f = sum(Tdiff(:).^2);
+f = sum(Tdiff(:).^2) + 1000*sum((x-1).^2);
 
 end
 
-function [c,ceq] = nonlincon(x, lMT, auxdata)
+function [c,ceq] = nonlincon(x, lMT, B, M, auxdata, isRigidTendon)
 
 ceq = [];
 
@@ -149,9 +196,23 @@ alphao = ones(size(lMT,1),1)*(params(4,:).*pennationAngleModifier);
 softMax_lMtildeCon = log(sum(exp(1000*(lMtilde-1.8))))/1000;
 softMin_lMtildeCon = log(sum(exp(1000*(0.1-lMtilde))))/1000;
 c = [softMax_lMtildeCon, softMin_lMtildeCon];
-
 c(c<-1000) = -1;
 c(c>1000) = 1;
+
+% Limits on peak moments
+[FT,~] = getForce(x, lMT, auxdata, isRigidTendon);
+Tmuscs = zeros(size(M));
+for dof = 1:size(M,2)
+    Tmuscs(:,dof) = sum(FT.*squeeze(B(:,dof,:)), 2);
+end
+M_nz = M(M~=0);
+Tmuscs_nz = Tmuscs(M~=0);
+
+[XMAX,IMAX,XMIN,IMIN] = extrema(M_nz);
+max_peaks = Tmuscs_nz(IMAX) - XMAX;
+min_peaks = XMIN - Tmuscs_nz(IMIN);
+
+c = [c max_peaks' min_peaks'];
 
 end
 
@@ -170,18 +231,23 @@ end
 
 function [auxdata] = updateParams(x, auxdata)
 
-numMuscles = size(auxdata.params, 2);
+indices = auxdata.indices;
+numlMo = indices.numlMo;
+numlTs = indices.numlTs;
+nume0 = indices.nume0;
 
 % Optimal fiber length modifier
-auxdata.params(9,:) = x(1:numMuscles);
+auxdata.params(9,indices.lMo) = x(1:numlMo);
 
 % Tendon slack length 
-auxdata.params(10,:) = x((numMuscles+1):(2*numMuscles));
+auxdata.params(10,indices.lTs) = x((numlMo+1):(numlMo+numlTs));
 
 % Muscle strain
 m = auxdata.e0LinCoefs.m;
 b = auxdata.e0LinCoefs.b;
-auxdata.params(7,:) = m*x((2*numMuscles + 1):(3*numMuscles)) + b*ones(numMuscles,1);
+auxdata.params(7,indices.e0) = m*x((numlMo+numlTs + 1):(numlMo+numlTs+nume0)) + b*ones(nume0,1);
+% auxdata.params(7,indices.e0) = m*x + b*ones(nume0,1);
+
 
 end
 
@@ -289,8 +355,8 @@ t7 = exp(kpe);
 pp2 = (t7 - 0.10e1);
 
 t5 = exp(kpe .* (lMtilde - 0.10e1) ./ e0);
-Fpe = ((t5 - 0.10e1) - pp1) ./ pp2;
-fpe = Fpe./FMo;
+fpe = ((t5 - 0.10e1) - pp1) ./ pp2;
+Fpe = FMo.*fpe;
 
 end
 
@@ -346,15 +412,22 @@ end
 
 function [M] = createMomentArray(M_Silder2007)
 
-% Remove high knee flexion angle from hip moment matching
+% Remove high knee flexion and high hip flexion angle from hip moment matching
 M_Silder2007{1} = reshape(M_Silder2007{1},numel(M_Silder2007{1})/4,4);
 M_Silder2007{1}(:,4) = [];
+M_Silder2007{1}(85:96,:) = [];
 M_Silder2007{1} = M_Silder2007{1}(:);
 
 % Remove high knee flexion from knee moment matching
 M_Silder2007{2} = reshape(M_Silder2007{2},numel(M_Silder2007{2})/4,4);
 M_Silder2007{2}(92:121,:) = [];
+% M_Silder2007{2}(:,4) = [];
 M_Silder2007{2} = M_Silder2007{2}(:);
+
+% Remove high knee flexion from ankle moment matching
+M_Silder2007{3} = reshape(M_Silder2007{3},numel(M_Silder2007{3})/4,4);
+M_Silder2007{3}(:,1) = [];
+M_Silder2007{3} = M_Silder2007{3}(:);
 
 % Combine the passive moments
 M_combined = [M_Silder2007{1} zeros(length(M_Silder2007{1}),4);...
@@ -367,15 +440,22 @@ end
 
 function [q, u] = createJointAngleVelocityArrays(q_Silder2007, allCoords)
 
-% Remove high knee flexion angle from hip moment matching
+% Remove high knee flexion and high hip flexion angle from hip moment matching
 q_Silder2007{1} = reshape(q_Silder2007{1},numel(q_Silder2007{1})/(4*6),4,6);
 q_Silder2007{1}(:,4,:) = [];
+q_Silder2007{1}(85:96,:,:) = [];
 q_Silder2007{1} = reshape(q_Silder2007{1},numel(q_Silder2007{1})/(6),6);
 
 % Remove high knee flexion from knee moment matching
 q_Silder2007{2} = reshape(q_Silder2007{2},numel(q_Silder2007{2})/(4*6),4,6);
 q_Silder2007{2}(92:121,:,:) = [];
+% q_Silder2007{2}(:,4,:) = [];
 q_Silder2007{2} = reshape(q_Silder2007{2},numel(q_Silder2007{2})/(6),6);
+
+% Remove high knee flexion from ankle moment matching
+q_Silder2007{3} = reshape(q_Silder2007{3},numel(q_Silder2007{3})/(4*6),4,6);
+q_Silder2007{3}(:,1,:) = [];
+q_Silder2007{3} = reshape(q_Silder2007{3},numel(q_Silder2007{3})/(6),6);
 
 % Combine the joint angles
 q_combined = [q_Silder2007{1}; q_Silder2007{2}; q_Silder2007{3}]*pi/180;

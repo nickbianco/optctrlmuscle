@@ -2,12 +2,13 @@
 % All muscle-tendon characteristics are fully described in the publication
 % and its online supplement
 
-function [err, FT, F, Fiso] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,lMT,params,Fvparam,Fpparam,Faparam)
+function [muscleData] = DeGroote2016Muscle_lMtildeState(a,lMtilde,vMtilde,lMT,params,Fvparam,Fpparam,Faparam)
 
 FMo = ones(size(a,1),1)*params(1,:);
 lMo = ones(size(a,1),1)*params(2,:);
 lTs = ones(size(a,1),1)*params(3,:);
 alphao = ones(size(a,1),1)*params(4,:);
+vMmax = ones(size(a,1),1)*params(5,:);
 tendonStiffnessModifier = ones(size(a,1),1)*params(6,:);
 muscleStrainModifier = ones(size(a,1),1)*params(7,:);
 muscleShapeFactModifier = ones(size(a,1),1)*params(8,:);
@@ -58,25 +59,43 @@ e4 = Fvparam(4);
 FMvtilde = e1*log((e2*vMtilde+e3)+sqrt((e2*vMtilde+e3).^2+1))+e4;
 
 % Active muscle force
-Fce = a.*FMltilde.*FMvtilde;
+fce = a.*FMltilde.*FMvtilde;
 
 % Passive muscle force-length characteristic
 e0 = 0.6*muscleStrainModifier;
 kpe = 4*muscleShapeFactModifier;
 t5 = exp(kpe .* (lMtilde - 0.10e1) ./ e0);
-Fpe = ((t5 - 0.10e1) - Fpparam(1)) ./ Fpparam(2);
+fpe = ((t5 - 0.10e1) - Fpparam(1,:)) ./ Fpparam(2,:);
 
 % Muscle force
-FM = Fce+Fpe;
+Fce = FMo.*fce;
+Fpe = FMo.*fpe;
+FM = Fce + Fpe;
+
 % Tendon force
-FT = FMo.*fse;
+FT = fse .* FMo;
 
 % Equilibrium between muscle and tendon forces
 % Fm*cos(alpha) = Ft
 cos_alpha = (lMT-lT)./lM;
-err =  FM.*cos_alpha-fse;
+err =  FM.*cos_alpha-FT;
 
-F = max(0,Fce);
-Fiso = max(0,FMltilde);
+% Set outputs
+muscleData.err = err;
+muscleData.fce = fce;
+muscleData.Fce = Fce;
+muscleData.fpe = fpe;
+muscleData.Fpe = Fpe;
+muscleData.FM = FM;
+muscleData.lTtilde = lTtilde;
+muscleData.lT = lT;
+muscleData.fse = fse;
+muscleData.FT = FT;
+muscleData.FMltilde = FMltilde;
+muscleData.lMtilde = lMtilde;
+muscleData.lM = lM;
+muscleData.vMtilde = vMtilde;
+muscleData.vM = vMmax.*vMtilde;
+muscleData.cos_alpha = cos_alpha;
 
 end
