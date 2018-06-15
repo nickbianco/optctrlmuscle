@@ -159,6 +159,14 @@ end
 if ~isfield(Misc, 'optimalFiberLengthModifiers') || isempty(Misc.optimalFiberLengthModifiers)
     Misc.optimalFiberLengthModifiers = [];
 end
+% Modify individual tendon slack lengths (lTs)
+if ~isfield(Misc, 'tendonSlackLengthModifiers') || isempty(Misc.tendonSlackLengthModifiers)
+    Misc.tendonSlackLengthModifiers = [];
+end
+% Modify individual pennation angles @ optimal fiber length (alphao)
+if ~isfield(Misc, 'pennationAngleModifiers') || isempty(Misc.pennationAngleModifiers)
+    Misc.pennationAngleModifiers = [];
+end
 % ExoTopology: DOF's assisted by passive device
 if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
    Misc.passiveDOFs = []; 
@@ -210,7 +218,7 @@ if ~strcmp(study{2},'Collins2015')
     assert(Misc.ankle_clutched_spring_stiffness == -1, errmsg)
 end
 
-if ~strcmp(study{2},'Quinlivan2017')
+if ~strcmp(study{2},'Quinlivan2017') && ~strcmp(study{1},'AnkleHipExosuit')
     errmsg = [study{2} ': shifting exoskeleton force peaks unused'];
     assert(Misc.shift_exo_peaks == false, errmsg)
 end
@@ -278,7 +286,7 @@ end
 % Modify muscle properties
 fprintf('Muscles with modified properties: \n')
 for m = 1:DatStore.nMuscles
-    muscle_name = Misc.MuscleNames_Input{m};
+    muscle_name = DatStore.MuscleNames{m};
     if isfield(Misc.tendonStiffnessModifiers, muscle_name)
         DatStore.params(6,m) = Misc.tendonStiffnessModifiers.(muscle_name);
         fprintf('--> %s tendon coefficient set to %f \n',muscle_name,DatStore.params(6,m))
@@ -298,8 +306,22 @@ for m = 1:DatStore.nMuscles
         DatStore.params(8,m) = 1;
     end
     if isfield(Misc.optimalFiberLengthModifiers, muscle_name)
-       DatStore.params(2,m) = DatStore.params(2,m) * Misc.optimalFiberLengthModifiers.(muscle_name);
-       fprintf('--> %s muscle optimal fiber length set to %f \n',muscle_name,DatStore.params(2,m))
+        DatStore.params(9,m) = Misc.optimalFiberLengthModifiers.(muscle_name);
+        fprintf('--> %s muscle optimal fiber length set to %f \n',muscle_name,DatStore.params(9,m))
+    else
+        DatStore.params(9,m) = 1;
+    end
+    if isfield(Misc.tendonSlackLengthModifiers, muscle_name)
+        DatStore.params(10,m) = Misc.tendonSlackLengthModifiers.(muscle_name);
+        fprintf('--> %s muscle tendon slack length set to %f \n',muscle_name,DatStore.params(10,m))
+    else
+        DatStore.params(10,m) = 1;
+    end
+    if isfield(Misc.pennationAngleModifiers, muscle_name)
+        DatStore.params(11,m) = Misc.pennationAngleModifiers.(muscle_name);
+        fprintf('--> %s muscle pennation angle set to %f \n',muscle_name,DatStore.params(11,m))
+    else
+        DatStore.params(11,m) = 1;
     end
 end
 fprintf('\n')
@@ -846,14 +868,49 @@ if strcmp(study{1}, 'AnkleHipExosuit')
         if strfind(DatStore.DOFNames{dof},'ankle_angle')
             % Negative to match ankle_angle_r coord convention
             DatStore.T_exo(:,dof) = -interp1(exoTime, ankleTorque, DatStore.time);
+            if Misc.shift_exo_peaks
+                [~,idxExo] = max(abs(DatStore.T_exo(:,dof)));
+                if DatStore.T_exo(idxExo,dof) > 0
+                    [~,idxID] = max(DatStore.T_exp(:,dof));
+                else
+                    [~,idxID] = min(DatStore.T_exp(:,dof));
+                end
+                
+                shift = idxExo - idxID;
+                if shift > 0
+                    DatStore.T_exo(:,dof) = [DatStore.T_exo((shift+1):end, dof); ...
+                                             DatStore.T_exo(1:shift, dof)];
+                else
+                    DatStore.T_exo(:,dof) = [DatStore.T_exo((end+shift+1):end, dof); ...
+                                             DatStore.T_exo(1:(end+shift), dof)];
+                end
+            end
         elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
             % Negative to match hip_flexion_r coord convention
             DatStore.T_exo(:,dof) = -interp1(exoTime, hipTorque, DatStore.time);
+            if Misc.shift_exo_peaks
+                [~,idxExo] = max(abs(DatStore.T_exo(:,dof)));
+                if DatStore.T_exo(idxExo,dof) > 0
+                    [~,idxID] = max(DatStore.T_exp(:,dof));
+                else
+                    [~,idxID] = min(DatStore.T_exp(:,dof));
+                end
+                
+                shift = idxExo - idxID;
+                if shift > 0
+                    DatStore.T_exo(:,dof) = [DatStore.T_exo((shift+1):end,dof); ...
+                                             DatStore.T_exo(1:shift, dof)];
+                else
+                    DatStore.T_exo(:,dof) = [DatStore.T_exo((end+shift+1):end,dof); ...
+                                             DatStore.T_exo(1:(end+shift), dof)];
+                end
+                
+            end
+            
         end
     end
-    
+        
 end
-
 
 if strcmp(study{2},'Quinlivan2017') || strcmp(study{2},'Q2017')
     % Exosuit moment curves
@@ -1240,7 +1297,6 @@ end
 MetabolicRate.individual_muscles = muscle_energy_rates(end,:);
 DatStore.MetabolicRate = MetabolicRate;
 
-% Tendon force from lMtilde
 % Interpolation lMT
 lMTinterp = interp1(DatStore.time,DatStore.LMT,Time);
 for m = 1:auxdata.NMuscles

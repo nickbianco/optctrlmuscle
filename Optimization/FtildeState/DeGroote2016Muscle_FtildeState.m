@@ -4,21 +4,26 @@
 
 function [muscleData] = DeGroote2016Muscle_FtildeState(a,fse,dfse,lMT,vMT,params,Fvparam,Fpparam,Faparam)
 
-FMo = ones(size(a,1),1)*params(1,:);
-lMo = ones(size(a,1),1)*params(2,:);
-lTs = ones(size(a,1),1)*params(3,:);
-alphao = ones(size(a,1),1)*params(4,:);
-vMmax = ones(size(a,1),1)*params(5,:);
 tendonStiffnessModifier = ones(size(a,1),1)*params(6,:);
 muscleStrainModifier = ones(size(a,1),1)*params(7,:);
 muscleShapeFactModifier = ones(size(a,1),1)*params(8,:);
+optimalFiberLengthModifier = params(9,:);
+tendonSlackLengthModifier = params(10,:);
+pennationAngleModifier = params(11,:);
+
+FMo = ones(size(a,1),1)*params(1,:);
+lMo = ones(size(a,1),1)*(params(2,:).*optimalFiberLengthModifier);
+lTs = ones(size(a,1),1)*(params(3,:).*tendonSlackLengthModifier);
+alphao = ones(size(a,1),1)*(params(4,:).*pennationAngleModifier);
+vMmax = ones(size(a,1),1)*params(5,:);
 
 % Inverse tendon force-length characteristic
 tendonStiffness = Fpparam(3).*tendonStiffnessModifier;
 lTtilde = log(5*(fse + 0.25))./tendonStiffness + 0.995;
 
 % Hill-type muscle model: geometric relationships
-lM = real(sqrt((lMo.*sin(alphao)).^2+(lMT-lTs.*lTtilde).^2));
+lT = lTs.*lTtilde;
+lM = real(sqrt((lMo.*sin(alphao)).^2+(lMT-lT).^2));
 lMtilde = lM./lMo;
 
 % Active muscle force-length characteristic
@@ -69,7 +74,7 @@ fce = a.*FMltilde.*FMvtilde;
 e0 = 0.6*muscleStrainModifier;
 kpe = 4*muscleShapeFactModifier;
 t5 = exp(kpe .* (lMtilde - 0.10e1) ./ e0);
-fpe = ((t5 - 0.10e1) - Fpparam(1)) ./ Fpparam(2);
+fpe = ((t5 - 0.10e1) - Fpparam(1,:)) ./ Fpparam(2,:);
 
 % Muscle force
 Fce = FMo.*fce;
@@ -90,6 +95,8 @@ muscleData.Fce = Fce;
 muscleData.fpe = fpe;
 muscleData.Fpe = Fpe;
 muscleData.FM = FM;
+muscleData.lTtilde = lTtilde;
+muscleData.lT = lT;
 muscleData.fse = fse;
 muscleData.FT = FT;
 muscleData.FMltilde = FMltilde;
