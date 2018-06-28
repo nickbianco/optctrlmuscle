@@ -95,6 +95,10 @@ output.fit.P_neg_avg = P_neg_avg;
 output.nodes.T = T + time(1);
 output.nodes.Y = Y;
 output.x = x;
+output.solution.peakTorque = x(1)*Tmax;
+output.solution.peakTime = output.nodes.T(2);
+output.solution.riseTime = output.nodes.T(2)-output.nodes.T(1);
+output.solution.fallTime = output.nodes.T(3)-output.nodes.T(2);
 
 end
 

@@ -20,20 +20,28 @@ a      = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
 
 % Get moment arms and DOF controls
-exoMomentArms = zeros(numColPoints,3);
+signMoment_hip = 1;
+signMoment_knee = 1;
+signMoment_ankle = 1;
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
 
-torqueParamsIndex = input.auxdata.active.params;
-peakTorque = input.phase.parameter(1, torqueParamsIndex.peak_torque);
-peakTime = input.phase.parameter(1, torqueParamsIndex.peak_time);
-riseTime = input.phase.parameter(1, torqueParamsIndex.rise_time);
-fallTime = input.phase.parameter(1, torqueParamsIndex.fall_time);
+torqueParams = input.auxdata.active.params;
+peakTorque = input.phase.parameter(1, torqueParams.peak_torque.idx);
+peakTime = input.phase.parameter(1, torqueParams.peak_time.idx);
+riseTime = input.phase.parameter(1, torqueParams.rise_time.idx);
+fallTime = input.phase.parameter(1, torqueParams.fall_time.idx);
+
+peakTorque = 0.5*(torqueParams.peak_torque.upper-torqueParams.peak_torque.lower)*(peakTorque+1) + torqueParams.peak_torque.lower;
+peakTime = 0.5*(torqueParams.peak_time.upper-torqueParams.peak_time.lower)*(peakTime+1) + torqueParams.peak_time.lower;
+riseTime = 0.5*(torqueParams.rise_time.upper-torqueParams.rise_time.lower)*(riseTime+1) + torqueParams.rise_time.lower;
+fallTime = 0.5*(torqueParams.fall_time.upper-torqueParams.fall_time.lower)*(fallTime+1) + torqueParams.fall_time.lower;
+
 aD = getTorqueControlFromParameters(peakTorque, peakTime, riseTime, fallTime, numColPoints);
 
 if input.auxdata.active.hip
-    exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
+    signMoment_hip = input.auxdata.signMoment.hip;
     if input.auxdata.numActiveDOFs > 1
         % TODO
     else
@@ -41,7 +49,7 @@ if input.auxdata.active.hip
     end
 end
 if input.auxdata.active.knee
-    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.active.knee);
+    signMoment_knee = input.auxdata.signMoment.knee;
     if input.auxdata.numActiveDOFs > 1
         % TODO
     else
@@ -49,7 +57,7 @@ if input.auxdata.active.knee
     end
 end
 if input.auxdata.active.ankle
-    exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
+    signMoment_ankle = input.auxdata.signMoment.ankle;
     if input.auxdata.numActiveDOFs > 1
         % TODO
     else
@@ -66,9 +74,9 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 muscleData = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
-Texo_act_hip = input.auxdata.Tmax_act.*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Tmax_act.*aD_knee.*exoMomentArms(:,2).*input.auxdata.kneeAngleSign;
-Texo_act_ankle = input.auxdata.Tmax_act.*aD_ankle.*exoMomentArms(:,3);
+Texo_act_hip = input.auxdata.Tmax_act.*aD_hip.*signMoment_hip;
+Texo_act_knee = input.auxdata.Tmax_act.*aD_knee.*signMoment_knee;
+Texo_act_ankle = input.auxdata.Tmax_act.*aD_ankle.*signMoment_ankle;
 
 % Moments constraint
 Topt = 150;
@@ -91,8 +99,29 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff muscleData.err act1 act2];
-% phaseout.path = [Tdiff muscleData.err act1 act2 Texo_act_hip Texo_act_knee Texo_act_ankle];
+if isfield(input.auxdata, 'powerMatchType')
+    q = splinestruct.IK;
+    dq = diff(q);
+    t = input.phase.time;
+    dt = repmat(diff(t), [1, size(q,2)]);
+    dqdt = dq./dt;
+        
+    Texo = [Texo_act_hip Texo_act_knee Texo_act_ankle];
+    Pexo = Texo(1:(end-1),:).*dqdt;
+    
+    switch input.auxdata.powerMatchType
+        case 'avg_pos'
+            Pexo_pos = Pexo;
+            Pexo_pos(Pexo_pos<0) = 0;
+            Pexo_match_val = sum(mean(Pexo_pos)) / input.auxdata.model_mass;
+        case 'avg_net'
+            Pexo_match_val = sum(mean(Pexo)) / input.auxdata.model_mass;
+    end
+   
+    phaseout.path = [Tdiff muscleData.err act1 act2 Pexo_match_val*ones(numColPoints,1)];
+else
+    phaseout.path = [Tdiff muscleData.err act1 act2];
+end
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit

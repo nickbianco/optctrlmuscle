@@ -19,33 +19,59 @@ dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
 a      = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
 
+% Shift exoskeleton torque curve
+torqueParams = input.auxdata.active.params;
+shiftTime = input.phase.parameter(1, torqueParams.shift_time.idx);
+shiftTime = 0.5*(torqueParams.shift_time.upper-torqueParams.shift_time.lower)*(shiftTime+1) + torqueParams.shift_time.lower;
+new_peak_time = input.auxdata.T_exo_peak_time + shiftTime;
+
+aD_exo = splinestruct.EXO;
+[~,idxs] = max(aD_exo);
+currIdx = max(idxs);
+[~,newIdx] = min(abs(input.phase.time-new_peak_time));
+
+shift_dir = sign(newIdx - currIdx);
+aD_exo_shift = aD_exo;
+if nnz(shift_dir)
+    shift_idx = abs(newIdx - currIdx);
+    if shift_dir > 0
+        aD_exo_shift = [zeros(shift_idx,3); aD_exo(1:end-shift_idx,:)];
+    elseif shift_dir <= 0
+        aD_exo_shift = [aD_exo(shift_idx:end,:); zeros(shift_idx-1,3)];
+    end
+end
+
 % Get moment arms and DOF controls
-exoMomentArms = zeros(numColPoints,3);
+peakTorque = input.phase.parameter(1, torqueParams.peak_torque.idx);
+peakTorque = 0.5*(torqueParams.peak_torque.upper-torqueParams.peak_torque.lower)*(peakTorque+1) + torqueParams.peak_torque.lower;
+signMoment_hip = 1;
+signMoment_knee = 1;
+signMoment_ankle = 1;
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
 if input.auxdata.active.hip
-    aD_hip = splinestruct.EXO(:,input.auxdata.hip_DOF);
-    if input.auxdata.same_torque_gain
-        exoMomentArms(:,1) = sign(input.auxdata.paramsUpper(input.auxdata.active.hip))*input.phase.parameter;
+    signMoment_hip = input.auxdata.signMoment.hip;
+    if input.auxdata.numActiveDOFs > 1
+        % TODO
     else
-        exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
+        aD_hip = peakTorque*aD_exo_shift(:,input.auxdata.hip_DOF);
     end
 end
 if input.auxdata.active.knee
-    aD_knee = splinestruct.EXO(:,input.auxdata.knee_DOF);
-    if input.auxdata.same_torque_gain
-        exoMomentArms(:,2) = sign(input.auxdata.paramsUpper(input.auxdata.active.knee))*input.phase.parameter;
+    signMoment_knee = input.auxdata.signMoment.knee;
+    if input.auxdata.numActiveDOFs > 1
+        % TODO
     else
-        exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.active.knee);
+        aD_knee = peakTorque*aD_exo_shift(:,input.auxdata.knee_DOF);
     end
 end
 if input.auxdata.active.ankle
-    aD_ankle = splinestruct.EXO(:,input.auxdata.ankle_DOF);
-    if input.auxdata.same_torque_gain
-        exoMomentArms(:,3) = sign(input.auxdata.paramsUpper(input.auxdata.active.ankle))*input.phase.parameter;
+    signMoment_ankle = input.auxdata.signMoment.ankle;
+    if input.auxdata.numActiveDOFs > 1
+        % TODO
     else
-        exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
+        aD_ankle = peakTorque*aD_exo_shift(:,input.auxdata.ankle_DOF);
     end
 end
 
@@ -58,9 +84,9 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 muscleData = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
-Texo_act_hip = input.auxdata.Tmax_act.*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Tmax_act.*aD_knee.*exoMomentArms(:,2).*input.auxdata.kneeAngleSign;
-Texo_act_ankle = input.auxdata.Tmax_act.*aD_ankle.*exoMomentArms(:,3);
+Texo_act_hip = input.auxdata.Tmax_act.*aD_hip.*signMoment_hip;
+Texo_act_knee = input.auxdata.Tmax_act.*aD_knee.*signMoment_knee;
+Texo_act_ankle = input.auxdata.Tmax_act.*aD_ankle.*signMoment_ankle;
 
 % Moments constraint
 Topt = 150;

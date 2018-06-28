@@ -1,4 +1,4 @@
-function [ExoTorques_Act, MomentArms_Act] = calcExoTorques_Ftilde_vAExoTopology_ActParam(OptInfo,DatStore)
+function [ExoTorques_Act] = calcExoTorques_Ftilde_vAExoTopology_ActParam(OptInfo,DatStore)
 
 time = OptInfo.result.solution.phase.time;
 numColPoints = length(time);
@@ -7,20 +7,27 @@ Ndof = auxdata.Ndof;
 
 % Get moment arms
 parameter = OptInfo.result.solution.parameter;
-exoMomentArms = zeros(numColPoints,3);
+signMoment_hip = 1;
+signMoment_knee = 1;
+signMoment_ankle = 1;
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
 
-torqueParamsIndex = auxdata.active.params;
-peakTorque = parameter(1, torqueParamsIndex.peak_torque);
-peakTime = parameter(1, torqueParamsIndex.peak_time);
-riseTime = parameter(1, torqueParamsIndex.rise_time);
-fallTime = parameter(1, torqueParamsIndex.fall_time);
+torqueParams = auxdata.active.params;
+peakTorque = parameter(1, torqueParams.peak_torque.idx);
+peakTime = parameter(1, torqueParams.peak_time.idx);
+riseTime = parameter(1, torqueParams.rise_time.idx);
+fallTime = parameter(1, torqueParams.fall_time.idx);
+
+peakTorque = 0.5*(torqueParams.peak_torque.upper-torqueParams.peak_torque.lower)*(peakTorque+1) + torqueParams.peak_torque.lower;
+peakTime = 0.5*(torqueParams.peak_time.upper-torqueParams.peak_time.lower)*(peakTime+1) + torqueParams.peak_time.lower;
+riseTime = 0.5*(torqueParams.rise_time.upper-torqueParams.rise_time.lower)*(riseTime+1) + torqueParams.rise_time.lower;
+fallTime = 0.5*(torqueParams.fall_time.upper-torqueParams.fall_time.lower)*(fallTime+1) + torqueParams.fall_time.lower;
 aD = getTorqueControlFromParameters(peakTorque, peakTime, riseTime, fallTime, numColPoints);
 
 if auxdata.active.hip
-    exoMomentArms(:,1) = parameter(:,auxdata.active.hip);
+    signMoment_hip = auxdata.signMoment.hip;
     if auxdata.numActiveDOFs > 1
         % TODO
     else
@@ -28,7 +35,7 @@ if auxdata.active.hip
     end
 end
 if auxdata.active.knee
-    exoMomentArms(:,2) = parameter(:,auxdata.active.knee);
+    signMoment_knee = auxdata.signMoment.knee;
     if auxdata.numActiveDOFs > 1
         % TODO
     else
@@ -36,19 +43,18 @@ if auxdata.active.knee
     end
 end
 if auxdata.active.ankle
-    exoMomentArms(:,3) = parameter(:,auxdata.active.ankle);
+    signMoment_ankle = auxdata.signMoment.ankle;
     if auxdata.numActiveDOFs > 1
         % TODO
     else
         aD_ankle = aD;
     end
 end
-MomentArms_Act = exoMomentArms(1,:);
 
 % Exosuit torques
-Texo_act_hip = auxdata.Tmax_act*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = auxdata.Tmax_act*aD_knee.*exoMomentArms(:,2)*auxdata.kneeAngleSign;
-Texo_act_ankle = auxdata.Tmax_act*aD_ankle.*exoMomentArms(:,3);
+Texo_act_hip = auxdata.Tmax_act.*aD_hip.*signMoment_hip;
+Texo_act_knee = auxdata.Tmax_act.*aD_knee.*signMoment_knee;
+Texo_act_ankle = auxdata.Tmax_act.*aD_ankle.*signMoment_ankle;
 
 ExoTorques_Act = zeros(length(time), Ndof);
 for dof = 1:Ndof
