@@ -465,20 +465,13 @@ if strcmp(study{1}, 'ParameterCalibration')
             elseif strcmp(paramsToCalibrate{pp}, 'tendon_slack_length')
                 preCalVal = auxdata.params(10,muscIdx);
             end
-            
-            % Rectus femoris passive muscle properties tend to be too stiff, even
-            % after calibration -- this modified bound attempts to prevent this.
-            if strcmp(musclesToCalibrate{m}, 'rect_fem_r')
-                preCalVal_lower = 1.0;
+
+            if 0.75*preCalVal < 0.75
+                preCalVal_lower = 0.75;
             else
-                if 0.75*preCalVal < 0.75
-                    preCalVal_lower = 0.75;
-                else
-                    preCalVal_lower = 0.75*preCalVal;
-                end
+                preCalVal_lower = 0.75*preCalVal;
             end
-            
-            
+
             if 1.25*preCalVal > 1.25
                 preCalVal_upper = 1.25;
             else

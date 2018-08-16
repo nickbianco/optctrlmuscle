@@ -57,7 +57,6 @@ idx0 = VtildeCE > 0;
 alphaL = 0.3*alphaS_ST;
 hdotShortenLengthen(idx0) = alphaL*VtildeCE(idx0);
 
-
 % Mechanical work rate (wdot>0 when shortening)
 wdot = max(-F.*Vce / params(4), zeros(size(F)));
 

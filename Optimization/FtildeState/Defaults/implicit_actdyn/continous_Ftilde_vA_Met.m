@@ -57,7 +57,7 @@ for m = 1:NMuscles
                                      Vce, ...
                                      max(0, muscleData.Fce(:,m)), ...
                                      max(0, muscleData.FMltilde(:,m)), ...
-                                     min(max(0, u), 1), ...
+                                     min(max(0, a(:,m)), 1), ... % TODO: keep using activation in place of excitation?
                                      min(max(0, a(:,m)), 1), ...
                                      paramStruct);
 end
@@ -66,6 +66,9 @@ w_aT = 1000;
 w_a = 0.05;
 w_vA = 0.05;
 w_Edot = 1/(input.auxdata.model_mass*9.81*1.25);
+% Overwriting first time point of metabolics to avoid effects that initial spikes
+% in fiber powers may have on the cost.
+Edot(1,:) = Edot(2,:);
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2)+ w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
  
 

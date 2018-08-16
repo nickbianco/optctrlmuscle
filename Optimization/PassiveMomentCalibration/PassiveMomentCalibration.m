@@ -58,13 +58,6 @@ x0 = ones(numParams, 1);
 lb = 0.75*x0;
 ub = 1.25*x0;
 
-% Rectus femoris passive muscle properties tend to be too stiff, even
-% after calibration -- these modified bounds attempt to prevent this.
-RFidx = find(contains(muscles,'rect_fem_r'));
-lb(RFidx) = 1.0;
-lb(RFidx+length(muscles)) = 1.0;
-lb(RFidx+(2*length(muscles))) = 1.0;
-
 options = optimoptions('fmincon', ...
                        'Display','iter', ...
                        'Algorithm','sqp', ...
@@ -169,7 +162,8 @@ Tmuscs_nz = Tmuscs(M~=0);
 % Moments matching objective
 Tdiff = M_nz - Tmuscs_nz;
 
-% Return scalar objective
+% Return scalar objective: match moments with minimal deviations from default
+% parameters
 f = sum(Tdiff(:).^2) + 1000*sum((x-1).^2);
 
 end
@@ -200,19 +194,19 @@ c(c<-1000) = -1;
 c(c>1000) = 1;
 
 % Limits on peak moments
-[FT,~] = getForce(x, lMT, auxdata, isRigidTendon);
-Tmuscs = zeros(size(M));
-for dof = 1:size(M,2)
-    Tmuscs(:,dof) = sum(FT.*squeeze(B(:,dof,:)), 2);
-end
-M_nz = M(M~=0);
-Tmuscs_nz = Tmuscs(M~=0);
-
-[XMAX,IMAX,XMIN,IMIN] = extrema(M_nz);
-max_peaks = Tmuscs_nz(IMAX) - XMAX;
-min_peaks = XMIN - Tmuscs_nz(IMIN);
-
-c = [c max_peaks' min_peaks'];
+% [FT,~] = getForce(x, lMT, auxdata, isRigidTendon);
+% Tmuscs = zeros(size(M));
+% for dof = 1:size(M,2)
+%     Tmuscs(:,dof) = sum(FT.*squeeze(B(:,dof,:)), 2);
+% end
+% M_nz = M(M~=0);
+% Tmuscs_nz = Tmuscs(M~=0);
+% 
+% [XMAX,IMAX,XMIN,IMIN] = extrema(M_nz);
+% max_peaks = Tmuscs_nz(IMAX) - XMAX;
+% min_peaks = XMIN - Tmuscs_nz(IMIN);
+% 
+% c = [c max_peaks' min_peaks'];
 
 end
 
@@ -368,6 +362,12 @@ FT = FMo.*fT;
 end
 
 function [B, lMT] = getLengthsMomentArms(model, q, u, coords, muscles)
+
+%   model: OpenSim model object
+%       q: array of joint angle values for model coordinates [numCoords x numTimePts]
+%       u: array of joint velocity values for model coordinates [numCoords x numTimePts]
+%  coords: array of strings containing joint coordinate names [1 x numCoords]
+% muscles: array of strings containing muscle names [1 x numMuscles]
 
 import org.opensim.modeling.*
 

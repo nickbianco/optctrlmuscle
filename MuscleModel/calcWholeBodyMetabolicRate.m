@@ -136,6 +136,9 @@ end
 
 state = model.initSystem();
 bodyMass = model.getTotalMass(state);
+% Overwriting first time point of metabolics to avoid effects that initial spikes
+% in fiber powers may have on the cost.
+musc_energy_rate(1,:) = musc_energy_rate(2,:);
 wholebody_energy_rate = sum(musc_energy_rate,2);
 duration = Time(end) - Time(1);
 norm_average_wholebody_energy_rate = trapz(mat.Time, wholebody_energy_rate) / bodyMass / duration;

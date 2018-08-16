@@ -21,7 +21,7 @@ aTmin = -1*ones(1,auxdata.Ndof);
 aTmax = 1*ones(1,auxdata.Ndof);
 aDmin = zeros(1, auxdata.numActiveDOFs); 
 aDmax = ones(1, auxdata.numActiveDOFs);
-if auxdata.hasActiveDevice && ~strcmp(auxdata.subcase, 'ActParam')
+if auxdata.hasActiveDevice
     control_bounds_lower = [excMin aTmin aDmin];
     control_bounds_upper = [excMax aTmax aDmax];
 else
@@ -32,20 +32,25 @@ bounds.phase.control.lower = control_bounds_lower;
 bounds.phase.control.upper = control_bounds_upper;
 
 % States bounds
-bounds.phase.initialstate.lower = a_min; 
-bounds.phase.initialstate.upper =  a_max;
-bounds.phase.state.lower = a_min; 
-bounds.phase.state.upper =  a_max;
-bounds.phase.finalstate.lower = a_min; 
-bounds.phase.finalstate.upper =  a_max;
+actMin = a_min*ones(1,auxdata.NMuscles); 
+actMax = a_max*ones(1,auxdata.NMuscles);
+bounds.phase.initialstate.lower = actMin; 
+bounds.phase.initialstate.upper =  actMax;
+bounds.phase.state.lower = actMin; 
+bounds.phase.state.upper =  actMax;
+bounds.phase.finalstate.lower = actMin; 
+bounds.phase.finalstate.upper =  actMax;
 
 % Integral bounds
 bounds.phase.integral.lower = 0;
 bounds.phase.integral.upper = 10000*(tf-t0);
 
 % Parameter bounds
-bounds.parameter.lower = auxdata.paramsLower;
-bounds.parameter.upper = auxdata.paramsUpper;
+% Parameter variable in the optimization problem always lie in the range 
+% [-1 1], and should be converted as necessary in the continuous function
+% for to make the correct computations.
+bounds.parameter.lower = -1*ones(size(auxdata.paramsLower));
+bounds.parameter.upper = 1*ones(size(auxdata.paramsUpper));
 
 % Path constraints
 ID_bounds = zeros(1, auxdata.Ndof);
@@ -54,28 +59,26 @@ bounds.phase.path.upper = ID_bounds;
 
 % Eventgroup
 % Impose mild periodicity
-pera_lower = -1;
-pera_upper = 1;
+pera_lower = -1*ones(1, auxdata.NMuscles);
+pera_upper = 1*ones(1, auxdata.NMuscles);
 bounds.eventgroup.lower = pera_lower; 
 bounds.eventgroup.upper = pera_upper;
 
 % Initial guess
 N = length(DatStore.time);
 guess.phase.time = DatStore.time;
-if auxdata.hasActiveDevice && ~strcmp(auxdata.subcase, 'ActParam')
-    control_guess = [0.2*ones(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.5*ones(N,auxdata.numActiveDOFs)];
+if auxdata.hasActiveDevice 
+    control_guess = [0.2*ones(N,auxdata.NMuscles) zeros(N,auxdata.Ndof) 0.2*ones(N,auxdata.numActiveDOFs)];
 else
     control_guess = [0.2*ones(N,auxdata.NMuscles) zeros(N,auxdata.Ndof)];
 end
 
 guess.phase.control = control_guess;
 
-guess.phase.state = 0.2*ones(N,1);
+guess.phase.state = 0.2*ones(N,auxdata.NMuscles);
 guess.phase.integral = 0;
 if auxdata.hasPassiveDevice
     guess.parameter = [zeros(1,auxdata.numExoParams-1) 1];
-elseif strcmp(Misc.subcase, 'ActParam')
-    guess.parameter = [zeros(1,auxdata.numExoParams-4) 0.2*ones(1,4)];
 else
     guess.parameter = zeros(1,auxdata.numExoParams);
 end
@@ -100,7 +103,7 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.nlp.ipoptoptions.tolerance = 1e-6;
+setup.nlp.ipoptoptions.tolerance = 1e-3;
 setup.nlp.ipoptoptions.maxiterations = 10000;
 setup.derivatives.supplier = 'sparseCD';
 setup.derivatives.derivativelevel = 'first';

@@ -15,7 +15,12 @@ aT = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 aD = input.phase.control(:,end-(input.auxdata.numActiveDOFs-1):end);
 
 % Get states
-a = input.phase.state;
+a = input.phase.state(:, 1:NMuscles);
+
+% Convert parameters to the correct range
+paramsLower = input.auxdata.paramsLower;
+paramsUpper = input.auxdata.paramsUpper;
+parameter = 0.5*(paramsUpper-paramsLower).*(input.phase.parameter+1) + paramsLower;
 
 % Get moment arms and DOF controls
 exoMomentArms = zeros(numColPoints,3);
@@ -23,7 +28,7 @@ aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
 if input.auxdata.active.hip
-    exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
+    exoMomentArms(:,1) = parameter(:,input.auxdata.active.hip);
     if input.auxdata.numActiveDOFs > 1
         aD_hip = aD(:,input.auxdata.active.hip);
     else
@@ -31,7 +36,7 @@ if input.auxdata.active.hip
     end
 end
 if input.auxdata.active.knee
-    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.active.knee);
+    exoMomentArms(:,2) = parameter(:,input.auxdata.active.knee);
     if input.auxdata.numActiveDOFs > 1
         aD_knee = aD(:,input.auxdata.active.knee);
     else
@@ -39,7 +44,7 @@ if input.auxdata.active.knee
     end
 end
 if input.auxdata.active.ankle
-    exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
+    exoMomentArms(:,3) = parameter(:,input.auxdata.active.ankle);
     if input.auxdata.numActiveDOFs > 1
         aD_ankle = aD(:,input.auxdata.active.ankle);
     else
@@ -50,7 +55,7 @@ end
 % PATH CONSTRAINTS
 
 % Get muscle forces
-[F, ~, ~, ~, ~, ~] = HillModel_RigidTendon(e, splinestruct.LMT, ... 
+[F, ~, ~, ~, ~, ~] = HillModel_RigidTendon(a, splinestruct.LMT, ... 
                                               splinestruct.VMT, ... 
                                               params, ... 
                                               input.auxdata.Fvparam, ...
@@ -59,7 +64,7 @@ end
 % Exosuit torques
 % Active device
 Texo_act_hip = input.auxdata.Tmax_act*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Tmax_act*aD_knee.*exoMomentArms(:,2);
+Texo_act_knee = input.auxdata.Tmax_act*aD_knee.*exoMomentArms(:,2).*input.auxdata.kneeAngleSign;
 Texo_act_ankle = input.auxdata.Tmax_act*aD_ankle.*exoMomentArms(:,3);
 
 % Moments constraint
@@ -86,13 +91,16 @@ end
 phaseout.path = Tdiff;
 
 % DYNAMIC CONSTRAINTS
-% Solve activation dynamics for one muscle so GPOPS is happy
-dadt = ActivationDynamics(e(:,1),a,tauAct(1),tauDeact(1),input.auxdata.b);
+% Activation dynamics
+dadt = ones(numColPoints,NMuscles);
+for m = 1:NMuscles
+    dadt(:,m) = ActivationDynamics(e(:,m),a(:,m),tauAct(m),tauDeact(m),input.auxdata.b);
+end
 
 phaseout.dynamics = dadt;
 
 % OBJECTIVE FUNCTION
 w1 = 1000;
-phaseout.integrand = sum(e.^2,2)+ w1.*sum(aT.^2,2);
+phaseout.integrand = sum(e.^2 + a.^2, 2) + w1.*sum(aT.^2,2);
 
 

@@ -8,8 +8,16 @@ Ndof = auxdata.Ndof;
 % Get device control
 aD = OptInfo.result.solution.phase.control(:,end-(auxdata.numActiveDOFs-1):end);
 
-% Get moment arms
+% Get net joint moments
+T_exp = interp1(DatStore.time, DatStore.T_exp, time);
+
+% Convert parameters to the correct range
+paramsLower = auxdata.paramsLower;
+paramsUpper = auxdata.paramsUpper;
 parameter = OptInfo.result.solution.parameter;
+parameter = 0.5*(paramsUpper-paramsLower).*(parameter+1) + paramsLower;
+
+% Get moment arms
 exoMomentArms = zeros(numColPoints,3);
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
@@ -37,6 +45,14 @@ if auxdata.active.ankle
     else
         aD_ankle = aD;
     end
+    if auxdata.shift_exo_peaks
+        T_hip_ref = sign(exoMomentArms(1,1))*T_exp(:,auxdata.hip_DOF);
+        T_ankle_ref = sign(exoMomentArms(1,3))*T_exp(:,auxdata.ankle_DOF);
+        [~,hipIdx] = max(T_hip_ref);
+        [~,ankleIdx] = max(T_ankle_ref);
+        shift_factor = ankleIdx - hipIdx;
+        aD_ankle = ShiftCurve(aD_ankle, shift_factor);
+    end 
 end
 MomentArms_Act = exoMomentArms(1,:);
 

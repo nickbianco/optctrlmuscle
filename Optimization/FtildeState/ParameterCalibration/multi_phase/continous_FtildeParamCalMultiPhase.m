@@ -30,14 +30,14 @@ for m = 1:length(musclesToCalibrate)
             case 'pennation_angle'
                 params(11,muscIdx) = paramVal;
             case 'muscle_strain'
-                error('Muscle strain calbiration not currently supported.');
+                error('Muscle strain calibration not currently supported.');
         end
     end
 end
 
 for p = 1:input.auxdata.numPhases
     
-    numColPoints    = size(input.phase(p).state,1);
+    numColPoints = size(input.phase(p).state,1);
     LMT = input.auxdata.splinestruct(p).p.LMT;
     VMT = input.auxdata.splinestruct(p).p.VMT;
     ID = input.auxdata.splinestruct(p).p.ID;
@@ -67,16 +67,12 @@ for p = 1:input.auxdata.numPhases
         Tdiff(:,dof) =  (T_exp-T_sim);
     end
     
-    
-    
     % DYNAMIC CONSTRAINTS
     % Activation dynamics
     dadt = ones(numColPoints,NMuscles);
     for m = 1:NMuscles
         dadt(:,m) = ActivationDynamics(e(:,m),a(:,m),tauAct(m),tauDeact(m),input.auxdata.b);
     end
-    
-    
     
     % OBJECTIVE FUNCTION
     costMuscles = fieldnames(terms);
