@@ -7,6 +7,9 @@
 *ADiGatorGrd.m*
 *ADiGatorHes.m*
 
+# Generated when running MuscleRedundancySolver.
+MuscleAnalysis/
+
 # Generated when running OpenSim.
 err.log
 out.log
@@ -19,4 +22,3 @@ out.log
 *.eps
 *.jpg
 *.png
-
