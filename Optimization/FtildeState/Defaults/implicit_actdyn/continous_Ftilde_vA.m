@@ -36,7 +36,7 @@ for dof = 1:Ndof
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 
-phaseout.path = [Tdiff muscleData.Hilldiff act1 act2];
+phaseout.path = [Tdiff muscleData.err act1 act2];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit
