@@ -1,5 +1,5 @@
 function phaseout = continous_Ftilde_vA(input)
-
+keyboard
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
 Ndof            = input.auxdata.Ndof;
