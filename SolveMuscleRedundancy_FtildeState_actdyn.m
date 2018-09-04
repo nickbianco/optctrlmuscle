@@ -1162,20 +1162,20 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.derivatives.derivativelevel = 'first';
+setup.derivatives.derivativelevel = 'first'; % first / second
 setup.nlp.ipoptoptions.tolerance = 10^(-4);
 setup.nlp.ipoptoptions.maxiterations = 10000;
-setup.derivatives.supplier = 'sparseCD';
+setup.derivatives.supplier = 'sparseCD'; % sparseCD / adigator
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-4;
-setup.mesh.maxiterations = 20;
-setup.mesh.colpointsmin = 5;
+setup.mesh.tolerance = 1e-3;
+setup.mesh.maxiterations = 0;
+setup.mesh.colpointsmin = 3;  % match the setup.mesh.phase.colpoints leading coeff. 
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
 setup.displaylevel = 2;
 NMeshIntervals = round((tf-t0)*Misc.Mesh_Frequency);
-setup.mesh.phase.colpoints = 5*ones(1,NMeshIntervals);
+setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
 setup.functions.continuous = str2func(['continous_Ftilde_vA' tag]);
 setup.functions.endpoint = str2func(['endpoint_Ftilde' tag]);
@@ -1214,7 +1214,7 @@ if isunix
     
 elseif ispc
     
-    lockDir = 'C:\Users\Nick\tmp\adigatorLock\';
+    lockDir = 'C:\Users\JP\tmp\adigatorLock\';
     pathLock=fullfile(lockDir, 'lockFile.mat');
     
     % If lock file exists, wait until it is deleted by a parallel process
