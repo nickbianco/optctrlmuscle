@@ -37,8 +37,9 @@ Topt = 150;
 Tdiff = zeros(numColPoints,Ndof);
 for dof = 1:Ndof
     T_exp=splinestruct.ID(:,dof);
+    T_exo=splinestruct.EXO(:,dof);
     index_sel=(dof-1)*(NMuscles)+1:(dof-1)*(NMuscles)+NMuscles;
-    T_sim=sum(muscleData.FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof);
+    T_sim=sum(muscleData.FT.*splinestruct.MA(:,index_sel),2) + Topt*aT(:,dof) + T_exo;
     Tdiff(:,dof) =  (T_exp-T_sim);
 end
 
@@ -62,7 +63,7 @@ for m = 1:NMuscles
                                      Vce, ...
                                      max(0, muscleData.Fce(:,m)), ...
                                      max(0, muscleData.FMltilde(:,m)), ...
-                                     min(max(0, u), 1), ...
+                                     min(max(0, a(:,m)), 1), ... % replaced excitation input w/ activation
                                      min(max(0, a(:,m)), 1), ...
                                      paramStruct);
 end

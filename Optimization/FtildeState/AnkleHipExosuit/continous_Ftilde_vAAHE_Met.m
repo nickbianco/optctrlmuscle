@@ -49,7 +49,7 @@ Edot = zeros(numColPoints, NMuscles);
 for m = 1:NMuscles
     Lce = muscleData.lMtilde(:,m)*params(2,m);
     Vce = muscleData.vMtilde(:,m)*params(5,m);
-    u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
+%     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
     paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
                    metabolicParams(3,m), metabolicParams(4,m), ...
                    metabolicParams(5,m)];
@@ -57,7 +57,7 @@ for m = 1:NMuscles
                                      Vce, ...
                                      max(0, muscleData.Fce(:,m)), ...
                                      max(0, muscleData.FMltilde(:,m)), ...
-                                     min(max(0, u), 1), ...
+                                     min(max(0, a(:,m)), 1), ... % replaced excitation input w/ activation
                                      min(max(0, a(:,m)), 1), ...
                                      paramStruct);
 end
@@ -65,6 +65,7 @@ w_aT = 1000;
 w_a = 0.05;
 w_vA = 0.05;
 w_Edot = 1/(input.auxdata.model_mass*9.81*1.50);
+% Edot(1,:) = Edot(2,:);
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2)+ w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
 
 

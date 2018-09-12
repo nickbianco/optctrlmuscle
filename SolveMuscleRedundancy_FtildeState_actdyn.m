@@ -850,6 +850,7 @@ if strcmp(study{1}, 'AnkleHipExosuit')
             exoTime = data.stp_075.non_tme_r.x.raw(:,cycle);
             ankleTorque = data.stp_075.aca_tor_r.x.raw(:,cycle) * subject_mass;
             hipTorque = data.stp_075.ahf_tor_l.x.raw(:,cycle) * subject_mass;
+            keyboard
         case 4
             exoTime = data.stp_100.non_tme_r.x.raw(:,cycle);
             ankleTorque = data.stp_100.aca_tor_r.x.raw(:,cycle) * subject_mass;
