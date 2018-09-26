@@ -55,6 +55,7 @@ function [Time,MExcitation,MActivation,RActivation,TForcetilde,TForce,MuscleName
 if ~isfield(Misc, 'study') || isempty(Misc.study)
     Misc.study = 'DeGroote2016/';
 end
+
 study = strsplit(Misc.study,'/');
 if length(study) == 1
    study{2} = ''; 
@@ -1122,7 +1123,7 @@ if strcmp(study{2},'HipAnkleMass')
     exoAnkleNormalizedMoment = ExoCurves.am_norm;
     exoHipMomentPeaks = ExoCurves.hm_peak * model_mass;
     exoHipNormalizedMoment = ExoCurves.hm_norm;
- 
+    
     % Interpolate exosuit moments to match data
     if Misc.exo_force_level    
         exoAnkleMoment = exoAnkleMomentPeaks(Misc.exo_force_level) * exoAnkleNormalizedMoment;
@@ -1147,6 +1148,7 @@ for dof = 1:auxdata.Ndof
     for m = 1:auxdata.NMuscles       
         auxdata.JointMASpline(dof).Muscle(m) = spline(DatStore.time,auxdata.MA(dof).Joint(:,m));       
     end
+    
     auxdata.JointIDSpline(dof) = spline(DatStore.time,DatStore.T_exp(:,dof));
     auxdata.JointEXOSpline(dof) = spline(DatStore.time,DatStore.T_exo(:,dof));
     auxdata.JointIKSpline(dof) = spline(DatStore.time,DatStore.q_exp(:,dof));
@@ -1164,12 +1166,12 @@ setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
 setup.derivatives.derivativelevel = 'first'; % first / second
-setup.nlp.ipoptoptions.tolerance = 10^(-4);
-setup.nlp.ipoptoptions.maxiterations = 10000;
+setup.nlp.ipoptoptions.tolerance = 10^(-5);
+setup.nlp.ipoptoptions.maxiterations = 20000;
 setup.derivatives.supplier = 'sparseCD'; % sparseCD / adigator
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-3;
+setup.mesh.tolerance = 1e-4;
 setup.mesh.maxiterations = 0;
 setup.mesh.colpointsmin = 3;  % match the setup.mesh.phase.colpoints leading coeff. 
 setup.mesh.colpointsmax = 20;
