@@ -274,6 +274,7 @@ Misc.MuscleAnalysisPath=MuscleAnalysisPath;
 if ~isfield(Misc,'MuscleNames_Input') || isempty(Misc.MuscleNames_Input)    
     Misc=getMuscles4DOFS(Misc);
 end
+
 [DatStore] = getMuscleInfo(IK_path,ID_path,Misc);
 
 % ----------------------------------------------------------------------- %
@@ -1166,7 +1167,7 @@ setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
 setup.derivatives.derivativelevel = 'first'; % first / second
-setup.nlp.ipoptoptions.tolerance = 10^(-5);
+setup.nlp.ipoptoptions.tolerance = 10^(-4);
 setup.nlp.ipoptoptions.maxiterations = 20000;
 setup.derivatives.supplier = 'sparseCD'; % sparseCD / adigator
 setup.scales.method = 'none';
@@ -1182,7 +1183,7 @@ setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
 setup.functions.continuous = str2func(['continous_Ftilde_vA' tag]);
 setup.functions.endpoint = str2func(['endpoint_Ftilde' tag]);
-    
+keyboard    
 % ADiGator setup
 persistent splinestruct
 input.auxdata = auxdata;

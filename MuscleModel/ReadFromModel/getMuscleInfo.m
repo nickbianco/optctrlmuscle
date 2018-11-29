@@ -122,7 +122,8 @@ DatStore.q_exp=IK_data.data(IK_inds,DOF_inds+1);        % +1 for time vector
 
 % Get the ID data
 ID_data=importdata(ID_path);
-t_ID=ID_data.data(:,1); t_ID=round(t_ID*10000)/10000;
+t_ID=ID_data.data(:,1); t_ID=round(t_ID*10000)/10000;  % !!! what is this? - why is this??
+
 
 % filter the ID data and store in Datstore.T_exp
 fs=1/mean(diff(t_ID));
@@ -145,7 +146,17 @@ end
 
 % select ID data between start and end
 ID_data_int=interp1(ID_data.data(:,1),ID_data.data,IK_data.data(:,1));       % interpolate data for IK sampling frequency
-t_ID=ID_data_int(:,1); t_ID=round(t_ID*10000)/10000;
+temp_t_ID = t_ID;
+t_ID=ID_data_int(:,1); 
+t_ID=round(t_ID*10000)/10000;
+% !!! the interpolation cuts off the last entry - makes it NaN
+% current workaround:
+if isnan(t_ID(end))
+    t_ID(end) = temp_t_ID(end,1);
+    ID_data_int(end,:) = ID_data.data(end,:);
+    ID_data_int(end,1) = temp_t_ID(end,1);
+end
+    
 ind0=find(t_ID>=Misc.time(1),1,'first'); ind_end=find(t_ID<=Misc.time(2),1,'last');
 ID_inds=ind0:ind_end;
 DatStore.T_exp=ID_data_int(ID_inds,DOF_ID_inds);
