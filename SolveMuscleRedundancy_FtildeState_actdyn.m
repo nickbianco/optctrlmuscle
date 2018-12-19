@@ -1183,7 +1183,7 @@ setup.mesh.phase.colpoints = 3*ones(1,NMeshIntervals);
 setup.mesh.phase.fraction = (1/(NMeshIntervals))*ones(1,NMeshIntervals);
 setup.functions.continuous = str2func(['continous_Ftilde_vA' tag]);
 setup.functions.endpoint = str2func(['endpoint_Ftilde' tag]);
-keyboard    
+
 % ADiGator setup
 persistent splinestruct
 input.auxdata = auxdata;
