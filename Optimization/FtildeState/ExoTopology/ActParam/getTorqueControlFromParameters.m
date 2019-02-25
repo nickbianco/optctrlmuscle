@@ -1,27 +1,5 @@
 function [control] = getTorqueControlFromParameters(peakTorque, peakTime, riseTime, fallTime, numColPoints)
 
-% handle special cases rise time or fall time are too slow
-% if riseTime >= peakTime
-%    riseTime = peakTime - 0.01; 
-% end
-% 
-% if fallTime >= (1 - peakTime)
-%    fallTime = 1 - peakTime - 0.01;
-% end
-
-% if isnan(peakTorque)
-%    peakTorque = 0.5;
-% end
-% if isnan(peakTime)
-%    peakTime = 0.5; 
-% end
-% if isnan(riseTime)
-%    riseTime = 0.5; 
-% end
-% if isnan(fallTime)
-%    fallTime = 0.5; 
-% end
-
 % set spline nodes based on parameters
 node1_x = peakTime - riseTime;
 node2_x = peakTime;

@@ -42,7 +42,6 @@ for m = 1:NMuscles
 end
 
 % Contraction dynamics is implicit
-
 phaseout.dynamics = [dadt dFtilde];
 
 % OBJECTIVE FUNCTION

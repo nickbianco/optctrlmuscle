@@ -133,12 +133,7 @@ for Scount = 1:length(splinenames)
 end
 setup.auxdata.splinestruct = splinestructad;
 % adigatorGenFiles4gpops2(setup)
-
 setup.functions.continuous = str2func(['Wrap4continous_SO_ExoTopology_' auxdata.subcase]);
-% setup.adigatorgrd.continuous = str2func(['continous_SO_ExoTopology' auxdata.subcase 'GrdWrap']);
-% setup.adigatorgrd.endpoint   = str2func(['endpoint_SO_ExoTopology' auxdata.subcase 'ADiGatorGrd']);
-% setup.adigatorhes.continuous = str2func(['continous_SO_ExoTopology' auxdata.subcase 'HesWrap']);
-% setup.adigatorhes.endpoint   = str2func(['endpoint_SO_ExoTopology' auxdata.subcase 'ADiGatorHes']);
 
 output = gpops2(setup);
 result = output.result.solution.phase(1);

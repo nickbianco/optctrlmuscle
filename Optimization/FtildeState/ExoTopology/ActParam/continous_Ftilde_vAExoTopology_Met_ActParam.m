@@ -1,6 +1,7 @@
 function phaseout = continous_Ftilde_vAExoTopology_Met_ActParam(input)
 
 % Get input data
+auxdata         = input.auxdata;
 NMuscles        = input.auxdata.NMuscles;
 Ndof            = input.auxdata.Ndof;
 tauAct          = input.auxdata.tauAct;
@@ -19,46 +20,65 @@ dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
 a      = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
 
+% Initialize torque arrays
+aD_hip = zeros(numColPoints,1);
+aD_knee = zeros(numColPoints,1);
+aD_ankle = zeros(numColPoints,1);
+
 % Convert parameters to the correct range
-paramsLower = input.auxdata.paramsLower;
-paramsUpper = input.auxdata.paramsUpper;
+paramsLower = auxdata.paramsLower;
+paramsUpper = auxdata.paramsUpper;
 parameter = 0.5*(paramsUpper-paramsLower).*(input.phase.parameter+1) + paramsLower;
-torqueParams = input.auxdata.active.params;
+torqueParams = auxdata.active.params;
 peakTorque = parameter(1, torqueParams.peak_torque.idx);
 peakTime = parameter(1, torqueParams.peak_time.idx);
 riseTime = parameter(1, torqueParams.rise_time.idx);
 fallTime = parameter(1, torqueParams.fall_time.idx);
-
-% Get moment arms and DOF controls
-aD_hip = zeros(numColPoints,1);
-aD_knee = zeros(numColPoints,1);
-aD_ankle = zeros(numColPoints,1);
 aD = getTorqueControlFromParameters(peakTorque, peakTime, riseTime, fallTime, numColPoints);
 
-exoMomentArms = zeros(numColPoints,3);
-if input.auxdata.active.hip
-    exoMomentArms(:,1) = parameter(:,input.auxdata.active.hip);
-    if input.auxdata.numActiveDOFs > 1
-        % TODO
-    else
-        aD_hip = aD;
-    end
-end
-if input.auxdata.active.kne
-    exoMomentArms(:,2) = parameter(:,input.auxdata.active.knee);
-    if input.auxdata.numActiveDOFs > 1
-        % TODO
-    else
-        aD_knee = aD;
-    end
-end
-if input.auxdata.active.ankle
-    exoMomentArms(:,3) = parameter(:,input.auxdata.active.ankle);
-    if input.auxdata.numActiveDOFs > 1
-        % TODO
-    else
-        aD_ankle = aD;
-    end
+if contains(auxdata.mod_name,'actHf_') || contains(auxdata.mod_name,'actHe_') 
+    aD_hip = aD;
+
+elseif contains(auxdata.mod_name,'actKf_') || contains(auxdata.mod_name,'actKe_')
+    aD_knee = aD;
+
+elseif contains(auxdata.mod_name,'actAp_') || contains(auxdata.mod_name,'actAd_')
+    aD_ankle = aD;
+
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHfAp')
+    aD_hip = aD;
+    ankleTorqueScale = parameter(1, torqueParams.ankle_torque_scale.idx);
+    aD_ankle = getTorqueControlFromParameters(peakTorque*ankleTorqueScale, ...
+        peakTime, riseTime, fallTime, numColPoints);
+    
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHfKf')
+    aD_hip = aD;
+    kneeTorqueScale = parameter(1, torqueParams.knee_torque_scale.idx);
+    aD_knee = getTorqueControlFromParameters(peakTorque*kneeTorqueScale, ...
+        peakTime, riseTime, fallTime, numColPoints);
+
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actKfAp')
+    aD_knee = aD;
+    ankleTorqueScale = parameter(1, torqueParams.ankle_torque_scale.idx);
+    aD_ankle = getTorqueControlFromParameters(peakTorque*ankleTorqueScale, ...
+        peakTime, riseTime, fallTime, numColPoints);
+    
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHfKfAp')
+    aD_hip = aD;
+    kneeTorqueScale = parameter(1, torqueParams.knee_torque_scale.idx);
+    ankleTorqueScale = parameter(1, torqueParams.ankle_torque_scale.idx);
+    aD_knee = getTorqueControlFromParameters(peakTorque*kneeTorqueScale, ...
+        peakTime, riseTime, fallTime, numColPoints);
+    aD_ankle = getTorqueControlFromParameters(peakTorque*ankleTorqueScale, ...
+        peakTime, riseTime, fallTime, numColPoints);
+    
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHeKe')
+    aD_hip = aD;
+    kneeTorqueScale = parameter(1, torqueParams.knee_torque_scale.idx);
+    aD_knee = getTorqueControlFromParameters(peakTorque*kneeTorqueScale, ...
+        peakTime, riseTime, fallTime, numColPoints);
+    
+    
 end
 
 % PATH CONSTRAINTS
@@ -70,9 +90,9 @@ act2 = vA + a./(ones(size(a,1),1)*tauAct);
 muscleData = DeGroote2016Muscle_FtildeState(a,Ftilde,dFtilde,splinestruct.LMT,splinestruct.VMT,params,input.auxdata.Fvparam,input.auxdata.Fpparam,input.auxdata.Faparam);
 
 % Exosuit torques
-Texo_act_hip = input.auxdata.Tmax_act.*aD_hip.*exoMomentArms(:,1);
-Texo_act_knee = input.auxdata.Tmax_act.*aD_knee.*exoMomentArms(:,2).*input.auxdata.kneeAngleSign;
-Texo_act_ankle = input.auxdata.Tmax_act.*aD_ankle.*exoMomentArms(:,3);
+Texo_act_hip = auxdata.Tmax_act.*aD_hip.*auxdata.signMoment.hip;
+Texo_act_knee = auxdata.Tmax_act.*aD_knee.*auxdata.signMoment.knee;
+Texo_act_ankle = auxdata.Tmax_act.*aD_ankle.*auxdata.signMoment.ankle;
 
 % Moments constraint
 Topt = 150;
@@ -95,29 +115,8 @@ for dof = 1:Ndof
     Tdiff(:,dof) = (T_exp-T_sim);
 end
 
-% if isfield(input.auxdata, 'powerMatchType')
-%     q = splinestruct.IK;
-%     dq = diff(q);
-%     t = input.phase.time;
-%     dt = repmat(diff(t), [1, size(q,2)]);
-%     dqdt = dq./dt;
-%         
-%     Texo = [Texo_act_hip Texo_act_knee Texo_act_ankle];
-%     Pexo = Texo(1:(end-1),:).*dqdt;
-%     
-%     switch input.auxdata.powerMatchType
-%         case 'avg_pos'
-%             Pexo_pos = Pexo;
-%             Pexo_pos(Pexo_pos<0) = 0;
-%             Pexo_match_val = sum(mean(Pexo_pos)) / input.auxdata.model_mass;
-%         case 'avg_net'
-%             Pexo_match_val = sum(mean(Pexo)) / input.auxdata.model_mass;
-%     end
-%    
-%     phaseout.path = [Tdiff muscleData.err act1 act2 Pexo_match_val*ones(numColPoints,1)];
-% else
-    phaseout.path = [Tdiff muscleData.err act1 act2];
-% end
+% PATH CONSTRAINTS
+phaseout.path = [Tdiff muscleData.err act1 act2];
 
 % DYNAMIC CONSTRAINTS
 % Activation dynamics is implicit
@@ -129,7 +128,7 @@ Edot = zeros(numColPoints, NMuscles);
 for m = 1:NMuscles
     Lce = muscleData.lMtilde(:,m)*params(2,m);
     Vce = muscleData.vMtilde(:,m)*params(5,m);
-    u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
+%     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
     paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
                    metabolicParams(3,m), metabolicParams(4,m), ...
                    metabolicParams(5,m)];
@@ -137,15 +136,15 @@ for m = 1:NMuscles
                                      Vce, ...
                                      max(0, muscleData.Fce(:,m)), ...
                                      max(0, muscleData.FMltilde(:,m)), ...
-                                     min(max(0, u), 1), ...
+                                     min(max(0, a(:,m)), 1), ...
                                      min(max(0, a(:,m)), 1), ...
                                      paramStruct);
 end
 w_aT = 1000;
-w_a = 0.05;
-w_vA = 0.05;
 w_Edot = 1/(input.auxdata.model_mass*9.81*1.25);
-% phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2) + w_a*sum(a.^2,2) + w_vA*sum((vA/100).^2,2);
+% Overwriting first time point of metabolics to avoid effects that initial spikes
+% in fiber powers may have on the cost.
+Edot(1,:) = Edot(2,:);
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2) + sum((vA/100).^2,2);
 
 

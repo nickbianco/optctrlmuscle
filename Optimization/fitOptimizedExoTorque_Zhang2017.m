@@ -1,4 +1,6 @@
-function [output] = fitOptimizedExoTorque_Zhang2017(time, q, T_exo, Tmax, startTime, X0)
+function [output] = fitOptimizedExoTorque_Zhang2017(time, q, T_exo, Tmax, startTime, X0, mod_name)
+
+%% Compute helpful terms for data fitting
 
 % Calculate angular velocity
 q = (pi/180)*q; % convert to radians
@@ -8,59 +10,243 @@ dt = diff(t)';
 dqdt = dq./dt; % rad/s
 
 % Calculate normalized device torque
-T_exo_norm = T_exo / Tmax; % unitless
+T_exo_norm = T_exo / Tmax; 
 T_exo_norm = interp1(time, T_exo_norm, t);
-T_exo_norm(end,:) = [];
+T_exo_fit = T_exo_norm;
 
 % Calculate "normalized" positive power
 [Popt, Popt_pos, Popt_neg, Popt_pos_avg, Popt_neg_avg] = calcDevicePower(T_exo_norm, dqdt);
+Popt_fit = Popt;
 
-% Shift time to start at zero and plot optimized device control profile
+% Shift time to start at zero
 startTime = startTime - time(1);
 timeShift = linspace(0, t(end)-t(1), length(t)-1);
-control = T_exo_norm(:,1);
-% plot(timeShift, control)
 
 % Map controls to degrees-of-freedom (which direction is the torque)
 mapControl2DOFs = sign(mean(T_exo));
 
-% Problem bounds
+%% Bounds & Initial Guesses
+config = ReadYaml('C:\Users\Nick\Projects\ExoTopology\exotopology\config.yaml');
+peak_torque = config.param_bounds.peak_torque;
+peak_time = config.param_bounds.peak_time;
+rise_time = config.param_bounds.rise_time;
+fall_time = config.param_bounds.fall_time;
+knee_torque_scale = config.param_bounds.knee_torque_scale;
+ankle_torque_scale = config.param_bounds.ankle_torque_scale;
+
 N = 4;
 lb = zeros(1,N);
 ub = ones(1,N);
 
 % peak torque
-lb(1) = 0;
-ub(1) = 1;
+lb(1) = peak_torque{1};
+ub(1) = peak_torque{2};
 
 % peak time
-lb(2) = 0.05;
-ub(2) = 0.95;
+lb(2) = peak_time{1};
+ub(2) = peak_time{2};
 
 % rise time
-lb(3) = 0.05;
-ub(3) = 0.5;
+lb(3) = rise_time{1};
+ub(3) = rise_time{2};
 
 % fall time
-lb(4) = 0.05;
-ub(4) = 0.5;
+lb(4) = fall_time{1};
+ub(4) = fall_time{2};
 
-% Initial guess
-if isempty(X0)
-    x0 = (lb+ub)/2;
-else
-    x0 = X0;
+% Take absolute value of exo torque (since it only acts in one direction) and
+% find max values and their times.
+T_exo_fit_abs = abs(T_exo_fit);
+[maxVals, idx] = max(T_exo_fit_abs);
+% Create percent gait cycle vector based on length of exo torque vector
+perGC = linspace(0,1,size(T_exo_fit,1));
+
+% Active hip flexion assistance
+if strcmp(mod_name, 'mrsmod_actHf')
+      
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(1); % peak torque guess based on max hip exo torque value
+    X0(2) = perGC(idx(1)); % peak time guess based on max hip exo torque time
+    
+% Active knee flexion assistance
+elseif strcmp(mod_name,'mrsmod_actKf')
+    
+    % TODO
+    [~, locs] = findpeaks(T_exo_fit_abs(:,2));
+    midIdx = round(size(T_exo_fit_abs,1)/2);
+    [~,idx] = min(abs(locs - midIdx));
+    midPeakLoc = locs(idx);
+    X0 = (lb+ub)/2;
+    X0(1) = T_exo_fit_abs(midPeakLoc,2);
+    X0(2) = perGC(midPeakLoc);
+
+% Active ankle plantarflexion
+elseif strcmp(mod_name, 'mrsmod_actAp')
+  
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(3); % peak torque guess based on max ankle exo torque value
+    X0(2) = perGC(idx(3)); % peak time guess based on max ankle exo torque time
+
+% Active coupled hip flexion + ankle plantarflexion assistance
+elseif strcmp(mod_name,'mrsmod_actHfAp')
+    % ankle torque scale
+    lb(5) = ankle_torque_scale{1};
+    ub(5) = ankle_torque_scale{2};
+    
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(1); % peak torque guess based on max hip exo torque value
+    X0(2) = perGC(idx(1)); % peak time guess based on max hip exo torque time
+    X0(5) = maxVals(3)/maxVals(1); % scale value based on relative peak torques
+    
+% Active coupled hip flexion + knee flexion assistance
+elseif strcmp(mod_name,'mrsmod_actHfKf')
+    % knee torque scale
+    lb(5) = knee_torque_scale{1};
+    ub(5) = knee_torque_scale{2};
+    
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(1); % peak torque guess based on max hip exo torque value
+    X0(2) = perGC(idx(1)); % peak time guess based on max hip exo torque time
+    X0(5) = maxVals(2)/maxVals(1); % scale value based on relative peak torques
+
+% Active coupled knee flexion + ankle plantarflexion assistance
+elseif strcmp(mod_name,'mrsmod_actKfAp')
+    % ankle torque scale
+    lb(5) = ankle_torque_scale{1};
+    ub(5) = ankle_torque_scale{2};
+    
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(2); % peak torque guess based on max knee exo torque value
+    X0(2) = perGC(idx(2)); % peak time guess based on max knee exo torque time
+    X0(5) = maxVals(3)/maxVals(2); % scale value based on relative peak torques
+
+% Active coupled hip flexion + knee flexion + ankle plantarflexion assistance
+elseif strcmp(mod_name,'mrsmod_actHfKfAp')
+    % knee torque scale
+    lb(5) = knee_torque_scale{1};
+    ub(5) = knee_torque_scale{2};
+    
+    % ankle torque scale
+    lb(6) = ankle_torque_scale{1};
+    ub(6) = ankle_torque_scale{2};
+    
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(1); % peak torque guess based on max hip exo torque value
+    X0(2) = perGC(idx(1)); % peak time guess based on max hip exo torque time
+    X0(5) = maxVals(2)/maxVals(1); % scale value based on relative peak torques
+    X0(6) = maxVals(3)/maxVals(1); % scale value based on relative peak torques
+    
+% Active hip extension assistance
+elseif contains(mod_name,'actHe_')
+    
+    % Find the first peak in hip extension torque, then find the next point in
+    % in time where torque hits zero (within tolerance) and set torque to zero
+    % at every time point after that. This is so we fit to the main hip 
+    % extension assistive torque peak and ignore the rest, which we couldn't 
+    % fit with the current parameterization anyway.
+    hipFlag = false;
+    for i = 1:size(T_exo_fit_abs,1)
+        if ((i > idx(1)) && (T_exo_fit_abs(i,1) < 0.001)) || hipFlag
+            T_exo_fit(i,1) = 0;
+            hipFlag = true;
+        end      
+    end
+    Popt_fit = calcDevicePower(T_exo_fit, dqdt);
+    
+    perGC = linspace(0,1,size(T_exo_fit,1));
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(1); % peak torque guess based on max hip exo torque value
+    X0(2) = perGC(idx(1)); % peak time guess based on max hip exo torque time
+    % Set rise time guess based on peak time, since torque usually begins
+    % immediately after heel strike.
+    if X0(2) < ub(3)
+        X0(3) = X0(2);
+        ub(3) = X0(2)+0.05;
+    end
+    % Set fall time guess based on when the torque hit zero after peak time.
+    X0(4) = perGC(nnz(abs(T_exo_fit(:,1))))-perGC(idx(1));
+    
+% Active knee extension assistance
+elseif contains(mod_name,'actKe_')
+    
+    % Find the first peak in knee extension torque, then find the next point in
+    % in time where torque hits zero (within tolerance) and set torque to zero
+    % at every time point after that. This is so we fit to the main knee 
+    % extension assistive torque peak and ignore the rest, which we couldn't 
+    % fit with the current parameterization anyway.
+    kneeFlag = false;
+    for i = 1:size(T_exo_fit_abs,1)
+        if (i > idx(2)) && (T_exo_fit_abs(i,2) < 0.001) || kneeFlag
+            T_exo_fit(i,2) = 0;
+            kneeFlag = true;
+        end       
+    end
+    % Create new power trajectory to fit based on adjusted torque profile.
+    Popt_fit = calcDevicePower(T_exo_fit, dqdt);
+    
+    perGC = linspace(0,1,size(T_exo_fit,1));
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(2); % peak torque guess based on max knee exo torque value
+    X0(2) = perGC(idx(2)); % peak time guess based on max knee exo torque time
+    % Set rise time guess based on peak time, since torque usually begins
+    % immediately after heel strike.
+    if X0(2) < ub(3)
+        X0(3) = X0(2);
+        ub(3) = X0(2)+0.05;
+    end
+    % Set fall time guess based on when the torque hit zero after peak time.
+    X0(4) = perGC(nnz(abs(T_exo_fit(:,2))))-perGC(idx(2));
+
+% Active coupled hip extension + knee extension assistance
+elseif strcmp(mod_name,'mrsmod_actHeKe')
+    % knee torque scale
+    lb(5) = knee_torque_scale{1};
+    ub(5) = knee_torque_scale{2};
+    
+    % Find the first peak in both the knee extension and hip extension torques, 
+    % then find the next point in time where each torque hits zero (within 
+    % tolerance) and set torques to zero at every time point after that. This is 
+    % so we fit to the main knee extension and hip extension assistive torque 
+    % peaks and ignore the rest, which we couldn't fit with the current 
+    % parameterization anyway.
+    hipFlag = false;
+    kneeFlag = false;
+    for i = 1:size(T_exo_fit_abs,1)
+        if ((i > idx(1)) && (T_exo_fit_abs(i,1) < 0.001)) || hipFlag
+            T_exo_fit(i,1) = 0;
+            hipFlag = true;
+        end
+        if (i > idx(2)) && (T_exo_fit_abs(i,2) < 0.001) || kneeFlag
+            T_exo_fit(i,2) = 0;
+            kneeFlag = true;
+        end       
+    end
+    % Create new power trajectory to fit based on adjusted torque profile.
+    Popt_fit = calcDevicePower(T_exo_fit, dqdt);
+    
+    X0 = (lb+ub)/2;
+    X0(1) = maxVals(1); % peak torque guess based on max hip exo torque value
+    X0(2) = perGC(idx(1)); % peak time guess based on max hip exo torque time
+    % Set rise time guess based on peak time, since torque usually begins
+    % immediately after heel strike.
+    if X0(2) < ub(3)
+        X0(3) = X0(2);
+        ub(3) = X0(2)+0.05;
+    end
+    % Set fall time guess based on average of when knee and hip torques hit zero 
+    % after their respective peak times.
+    X0(4) = (perGC(nnz(abs(T_exo_fit(:,1))))-perGC(idx(1)) + ... 
+             perGC(nnz(abs(T_exo_fit(:,2))))-perGC(idx(2)))/2;
+    X0(5) = maxVals(2)/maxVals(1); % scale value based on relative peak torques
+    
 end
 
-[~, startIdx] = min(abs(timeShift-startTime));
+%% Problem setup
 
-options = optimoptions('fmincon', 'Display', 'iter', ...
-                        'OptimalityTolerance', 1e-6, ...
-                        'MaxFunctionEvaluations', 100000, ...
-                        'MaxIterations', 100000, ...
-                        'HessianApproximation', 'lbfgs');
+% Auxiliary data available to each data fitting problem
+[~, startIdx] = min(abs(timeShift-startTime));
 auxdata = struct();
-auxdata.control = control;
+auxdata.mod_name = mod_name;
 auxdata.timeShift = timeShift;
 auxdata.startTime = startTime;
 auxdata.startIdx = startIdx;
@@ -69,78 +255,112 @@ auxdata.mapControl2DOFs = mapControl2DOFs;
 auxdata.Popt = Popt;
 auxdata.Popt_pos_avg = Popt_pos_avg;
 auxdata.Popt_neg_avg = Popt_neg_avg;
+auxdata.T_exo_norm = T_exo_norm;
+auxdata.T_exo_fit = T_exo_fit;
+auxdata.Popt_fit = Popt_fit;
+auxdata.lb = lb;
+auxdata.ub = ub;
 
-[x,f,flag] = fmincon(@(x) fitfunc(x, auxdata), x0, ...
-    [], [], [], [], lb, ub, @(x) nonlincon(x, auxdata), options);
+% Set initial guess structure to pass to problem
+if isempty(X0)
+    x0 = (lb+ub)/2;
+else
+    x0 = scaleVariables(X0, auxdata);
+end
 
-[controlFit, T, Y] = buildControlFit(x, auxdata);
+% LSQNONLIN options
+options = optimoptions('lsqnonlin', 'Display', 'iter', ...
+                        'OptimalityTolerance', 1e-9, ...
+                        'MaxFunctionEvaluations', 100000, ...
+                        'MaxIterations', 100000);
 
-torqueFit = controlFit*mapControl2DOFs;
-[P, P_pos, P_neg, P_pos_avg, P_neg_avg] = calcDevicePower(torqueFit, dqdt);
+% Run problem ten times and slightly perturb each solution to create an initial
+% guess for the next problem. Take best solution of the ten.
+x0_redo = x0;
+a = 0.25;
+b = -0.25;
+resnorm_best = inf;
+x_best = x0;
+for i = 1:10    
+    [x,resnorm] = lsqnonlin(@(x) fitfunc_lsq(x, auxdata), x0_redo, -ones(size(lb)), ...
+        ones(size(ub)), options);
+    if resnorm < resnorm_best
+       x_best = x; 
+       resnorm_best = resnorm;
+    end
+    perturb = a + (b-a).*rand(size(x_best));
+    x0_redo = x_best+perturb;
+end
+
+%% Store solution in output struct
+torque = calcDeviceTorque(x_best, auxdata);
+[P, P_pos, P_neg, P_pos_avg, P_neg_avg] = calcDevicePower(torque, dqdt);
 
 output.time = linspace(t(1), t(end), length(t)-1);
-output.opt.control = control;
 output.opt.P = Popt;
 output.opt.P_pos = Popt_pos;
 output.opt.P_neg = Popt_neg;
 output.opt.P_pos_avg = Popt_pos_avg;
 output.opt.P_neg_avg = Popt_neg_avg;
+output.opt.torque = T_exo_norm(1:(end-1),:);
 
-output.fit.control = controlFit;
 output.fit.P = P;
 output.fit.P_pos = P_pos;
 output.fit.P_neg = P_neg;
 output.fit.P_pos_avg = P_pos_avg;
 output.fit.P_neg_avg = P_neg_avg;
-output.nodes.T = T + time(1);
-output.nodes.Y = Y;
-output.x = x;
-output.solution.peakTorque = x(1)*Tmax;
-output.solution.peakTime = output.nodes.T(2);
-output.solution.riseTime = output.nodes.T(2)-output.nodes.T(1);
-output.solution.fallTime = output.nodes.T(3)-output.nodes.T(2);
+output.fit.torque = torque(1:(end-1),:);
+output.x = unscaleVariables(x_best, auxdata);
+output.lb = lb;
+output.ub = ub;
 
 end
 
-function [f] = fitfunc(x, auxdata)
-
-control = auxdata.control;
-dqdt = auxdata.dqdt;
-mapControl2DOFs = auxdata.mapControl2DOFs;
-
-controlFit = buildControlFit(x, auxdata);
-
-torqueFit = controlFit*mapControl2DOFs;
-[P, P_pos, P_neg, P_pos_avg, P_neg_avg] = calcDevicePower(torqueFit, dqdt);
-
-
-% corrVal = corr2(controlFit, control);
-% if isnan(corrVal)
-%     corrVal = -1; 
-% end
-% corrCost = 1 - corrVal;
-
-controlRMS = rms(controlFit - control) / max(control);
-powerRMS = sum(rms(P - auxdata.Popt)) / sum(max(auxdata.Popt));
-
-f = controlRMS + powerRMS;
+%% SCALEVARIABLES
+function [x] = scaleVariables(x, auxdata)
+    x = ((2*x - auxdata.lb)./(auxdata.ub-auxdata.lb))-1;
 end
 
-function [fit, T, Y] = buildControlFit(x, auxdata)
+%% UNSCALEVARIABLES
+function [x] = unscaleVariables(x, auxdata)
+    x = 0.5*(auxdata.ub-auxdata.lb).*(x+1) + auxdata.lb;
+end
+
+%% FITFUNC_LSQ
+function [f] = fitfunc_lsq(x, auxdata)
+
+% torque errors
+torque = calcDeviceTorque(x, auxdata);
+% perGC_torque = linspace(0, 1, size(torque, 1));
+% [~, maxIdx_torque] = max(abs(torque));
+% [~, maxIdx_torqueFit] = max(abs(auxdata.T_exo_fit));
+% peakTimeErr_torque = abs(perGC_torque(maxIdx_torque) - perGC_torque(maxIdx_torqueFit));
+torqueErr = (abs(torque) - abs(auxdata.T_exo_fit)); % ./ sum(max(abs(auxdata.T_exo_fit)));
+% peakValErr_torque = torqueErr(maxIdx_torqueFit);
+% torqueErrPos = torqueErr;
+% torqueErrPos(torqueErrPos<0) = 0;
+
+% power errors
+[P, P_pos, ~, ~, ~] = calcDevicePower(torque, auxdata.dqdt);
+% perGC_P = linspace(0, 1, size(P, 1));
+% [~, maxIdx_P] = max(abs(P));
+% [~, maxIdx_Pfit] = max(abs(auxdata.Popt_fit));
+% peakTimeErr_P = abs(perGC_P(maxIdx_P) - perGC_P(maxIdx_Pfit));
+powerErr = (P - auxdata.Popt_fit); % / sum(max(auxdata.Popt_fit));
+
+f = [torqueErr(:); powerErr(:)];
+
+end
+
+%% BUILDPARAMCONTROL
+function [paramControl, T, Y] = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata)
 
 startTime = auxdata.startTime;
 startIdx = auxdata.startIdx;
 timeShift = auxdata.timeShift;
-control = auxdata.control;
 
 numPts = length(timeShift(startIdx:end));
-numZeros = length(control) - numPts;
-
-% extract variables
-peakTorque = x(1);
-peakTime = x(2);
-riseTime = x(3);
-fallTime = x(4);
+numZeros = size(auxdata.T_exo_norm, 1) - numPts;
 
 % set spline nodes based on parameters
 node1_t = peakTime - riseTime;
@@ -185,33 +405,75 @@ v = [pre_rise rising_torque falling_torque post_fall];
 t = linspace(0, 1, length(v));
 tq = linspace(0, 1, numPts);
 
-fit = [zeros(1,numZeros) interp1(t, v, tq)]';
+paramControl = [zeros(1,numZeros) interp1(t, v, tq)]';
 T = [node1_t node2_t node3_t]*(timeShift(end)-startTime) + startTime;
 Y = [node1_y node2_y node3_y];
 
 end
 
-function [c,ceq] = nonlincon(x, auxdata)
+%% CALCDEVICETORQUE
+function [torque] = calcDeviceTorque(x, auxdata)
 
-% mapControl2DOFs = auxdata.mapControl2DOFs;
-% dqdt = auxdata.dqdt;
+% create empty torque array
+torque = zeros(size(auxdata.T_exo_norm));
 
-controlFit = buildControlFit(x, auxdata);
-% T = controlFit*mapControl2DOFs;
-% [~, ~, ~, P_pos_avg, P_neg_avg] = calcDevicePower(T, dqdt);
+x = unscaleVariables(x, auxdata);
 
-c = max(controlFit) - max(auxdata.control);
+% extract curve variables
+peakTorque = x(1);
+peakTime = x(2);
+riseTime = x(3);
+fallTime = x(4);
 
-% P_net_avg_err = (P_neg_avg + P_pos_avg) - (auxdata.Popt_neg_avg + auxdata.Popt_pos_avg);
-% P_neg_avg_err = abs(P_neg_avg - auxdata.Popt_neg_avg);
-% P_pos_avg_err = abs(P_pos_avg - auxdata.Popt_pos_avg);
-ceq = [];
+mod_name = auxdata.mod_name;
+
+if contains(mod_name,'actHf_') || contains(auxdata.mod_name,'actHe_')
+    torque(:,1) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);
+    
+elseif contains(mod_name,'actKf_') || contains(auxdata.mod_name,'actKe_')
+    torque(:,2) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);
+
+elseif contains(mod_name, 'actAp_') || contains(auxdata.mod_name,'actAd_')
+    torque(:,3) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);
+
+elseif strcmp(mod_name,'mrsmod_actHfAp') 
+    ankleTorqueScale = x(5);
+    torque(:,1) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);     
+    torque(:,3) = buildParamControl(peakTorque*ankleTorqueScale, peakTime, riseTime, fallTime, auxdata);
+    
+elseif strcmp(mod_name,'mrsmod_actHfKf') 
+    kneeTorqueScale = x(5);
+    torque(:,1) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);     
+    torque(:,2) = buildParamControl(peakTorque*kneeTorqueScale, peakTime, riseTime, fallTime, auxdata);
+    
+elseif strcmp(mod_name,'mrsmod_actKfAp') 
+    ankleTorqueScale = x(5);
+    torque(:,2) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);     
+    torque(:,3) = buildParamControl(peakTorque*ankleTorqueScale, peakTime, riseTime, fallTime, auxdata);
+
+elseif strcmp(mod_name,'mrsmod_actHfKfAp')
+    kneeTorqueScale = x(5);
+    ankleTorqueScale = x(6);
+    torque(:,1) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);
+    torque(:,2) = buildParamControl(peakTorque*kneeTorqueScale, peakTime, riseTime, fallTime, auxdata);
+    torque(:,3) = buildParamControl(peakTorque*ankleTorqueScale, peakTime, riseTime, fallTime, auxdata);    
+    
+elseif strcmp(mod_name,'mrsmod_actHeKe')
+    kneeTorqueScale = x(5);
+    torque(:,1) = buildParamControl(peakTorque, peakTime, riseTime, fallTime, auxdata);
+    torque(:,2) = buildParamControl(peakTorque*kneeTorqueScale, peakTime, riseTime, fallTime, auxdata);
+    
+end
+
+torque = torque.*auxdata.mapControl2DOFs;
 
 end
 
-function [P, P_pos, P_neg, P_pos_avg, P_neg_avg] = calcDevicePower(T, dqdt)
+%% CALCDEVICEPOWER
+function [P, P_pos, P_neg, P_pos_avg, P_neg_avg] = calcDevicePower(torque, dqdt)
 
-P = T.*dqdt;
+torque(end,:) = [];
+P = torque.*dqdt;
 P_pos = P;
 P_neg = P;
 P_pos(P_pos < 0) = 0;
@@ -220,8 +482,5 @@ P_pos_avg = sum(mean(P_pos));
 P_neg_avg = sum(mean(P_neg));
 
 end
-
-
-
 
 
