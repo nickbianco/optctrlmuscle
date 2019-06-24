@@ -634,6 +634,47 @@ auxdata.Fvparam = Fvparam;
 load Faparam.mat                            
 auxdata.Faparam = Faparam;
 
+% Pre-calibration to passive moments from Silder et al. 2007
+% need to handle if we want to calib or not, and if we have done it already
+% conditional for if empty struct -> we don't want to calib
+% conditional for if we have the file already -> don't recalibrate
+
+% hardcode the path to the subject we are looking at
+% TODO: figure out how to go to each subject
+
+% fprintf(Misc.trail
+calibrationparampath = ['C:\Users\JP\code\repos\Stanford\delplab\projects\AnkleHipExosuit\results\experiments\',Misc.trialName(17:26),'\calibratedModifiers.mat'];
+
+if isempty(fieldnames(Misc.parameterCalibrationTerms))
+    fprintf('\n***********************************************************')
+    fprintf('\nSkipping passive moment calibration: no parameters chosen.\n')
+    if isfile(calibrationparampath)
+        fprintf('But we have previous calibration... loading it now.\n')
+        load(calibrationparampath);
+    else
+        fprintf('No previous calibration, using default scaled model.\n')
+    end
+else
+    % check here for the existing calibration
+    if isfile(calibrationparampath)
+        fprintf('\nWe have a previous passive calibration, loading it now.\n')
+        load(calibrationparampath);                
+    else
+        fprintf('\nBeginning passive moment calibration.\n')
+        calibratedModifiers = PassiveMomentCalibration(model_path, auxdata, DatStore(1), Misc.parameterCalibrationTerms);
+        save(calibrationparampath,'calibratedModifiers');
+        
+    end
+    % Update parameter structs
+    indices = calibratedModifiers.indices;
+    auxdata.params(9,indices.lMo) = calibratedModifiers.lMo;
+    auxdata.params(10,indices.lTs) = calibratedModifiers.lTs;
+    auxdata.params(7,indices.e0) = calibratedModifiers.e0;
+end
+
+
+
+
 % Parameters of passive muscle force-length characteristic, and tendon
 % characteristic
 e0 = 0.6*DatStore.params(7,:); 
@@ -870,7 +911,7 @@ if strcmp(study{1}, 'AnkleHipExosuit')
     for dof = 1:auxdata.Ndof
         if strfind(DatStore.DOFNames{dof},'ankle_angle')
             % Negative to match ankle_angle_r coord convention
-            DatStore.T_exo(:,dof) = -interp1(exoTime, ankleTorque, DatStore.time);
+            DatStore.T_exo(:,dof) = -interp1(exoTime, ankleTorque, DatStore.time, 'pchip');
             if Misc.shift_exo_peaks
                 [~,idxExo] = max(abs(DatStore.T_exo(:,dof)));
                 if DatStore.T_exo(idxExo,dof) > 0
@@ -890,7 +931,7 @@ if strcmp(study{1}, 'AnkleHipExosuit')
             end
         elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
             % Negative to match hip_flexion_r coord convention
-            DatStore.T_exo(:,dof) = -interp1(exoTime, hipTorque, DatStore.time);
+            DatStore.T_exo(:,dof) = -interp1(exoTime, hipTorque, DatStore.time, 'pchip');
             if Misc.shift_exo_peaks
                 [~,idxExo] = max(abs(DatStore.T_exo(:,dof)));
                 if DatStore.T_exo(idxExo,dof) > 0
@@ -1132,11 +1173,11 @@ if strcmp(study{2},'HipAnkleMass')
         for dof = 1:auxdata.Ndofdoit
             if strfind(DatStore.DOFNames{dof},'ankle_angle')
                 % Negative to match ankle_angle_r coord convention
-                DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time); 
+                DatStore.T_exo(:,dof) = -interp1(exoTime, exoAnkleMoment, DatStore.time, 'previous','extrap'); 
                 DatStore.tradeoff(dof) = -1;
             elseif strfind(DatStore.DOFNames{dof},'hip_flexion')
                 % Positive to match hip_flexion_r coord convention
-                DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time);
+                DatStore.T_exo(:,dof) = interp1(exoTime, exoHipMoment, DatStore.time, 'previous','extrap');
                 DatStore.tradeoff(dof) = 1;
             end
         end
@@ -1167,12 +1208,12 @@ setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
 setup.derivatives.derivativelevel = 'first'; % first / second
-setup.nlp.ipoptoptions.tolerance = 10^(-2);
+setup.nlp.ipoptoptions.tolerance = 10^(-3);
 setup.nlp.ipoptoptions.maxiterations = 20000;
 setup.derivatives.supplier = 'sparseCD'; % sparseCD / adigator
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-4;
+setup.mesh.tolerance = 1e-3;
 setup.mesh.maxiterations = 2;
 setup.mesh.colpointsmin = 3;  % match the setup.mesh.phase.colpoints leading coeff. 
 setup.mesh.colpointsmax = 20;
