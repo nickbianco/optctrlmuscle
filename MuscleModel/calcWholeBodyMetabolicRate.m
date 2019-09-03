@@ -48,11 +48,13 @@ end
 
 % Check excitation
 if any(any(e < 0))
+    fprintf('\nWhole Body calculation:\n')
     if any(any(e < -0.1))
         e(e < -0.1)
         warning('VERY negative excitation! ')
         if length(e(e < -0.1)) < 5
             fprintf('But very few time points...still clipping at 0.')
+            culprits = e(e<0)
             e(e < 0) = 0;
         else
             fprint('Exiting...')
@@ -61,15 +63,18 @@ if any(any(e < 0))
         end
     else
         warning('Slightly negative excitation...clipping at 0.');
+        culprits = e(e<0)
         e(e < 0) = 0;
     end
 end
 if any(any(e > 1))
+    fprintf('\nWhole Body calculation:\n')
     if any(any(e > 1.1))
         e(e > 1.1)
         warning('Excitation much greater than 1!');
         if length(e(e > 1.1)) < 5
             fprintf('But very few time points...still clipping at 1.')
+            culprits = e(e>1)
             e(e > 1) = 1;
         else
             fprint('Exiting...')
@@ -78,6 +83,7 @@ if any(any(e > 1))
         end
     else
         warning('Excitation slightly greater than 1...clipping at 1.');
+        culprits = e(e>1)
         e(e > 1) = 1;
     end
 end

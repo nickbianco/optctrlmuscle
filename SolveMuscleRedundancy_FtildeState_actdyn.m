@@ -122,7 +122,7 @@ if ~isfield(Misc,'f_order_IK') || isempty(Misc.f_order_IK)
 end
 % Mesh Frequency
 if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
-   Misc.Mesh_Frequency=100;
+   Misc.Mesh_Frequency=100; % 100
 end
 % Which study?
 if ~isfield(Misc,'study') || isempty(Misc.study)
@@ -706,6 +706,7 @@ auxdata.initialtime = t0;
 auxdata.finaltime = tf;
 
 % Controls bounds
+% !!! fix the control bounds for the excitations if doing explicit!!!
 vAmin = vA_min./auxdata.tauDeact;
 vAmax = vA_max./auxdata.tauAct;
 dFMin = dF_min*ones(1,auxdata.NMuscles);
@@ -752,7 +753,7 @@ bounds.phase.finalstate.upper = [actMax, Ffmax];
 % Integral bounds
 bounds.phase.integral.lower = 0;
 bounds.phase.integral.upper = 10000*(tf-t0);
-
+% keyboard
 % Parameter bounds
 switch study{2}
     case 'HipAnkle'
@@ -805,10 +806,12 @@ HillEquil = zeros(1, auxdata.NMuscles);
 ID_bounds = zeros(1, auxdata.Ndof);
 act1_lower = zeros(1, auxdata.NMuscles);
 act1_upper = inf*ones(1, auxdata.NMuscles);
-act2_lower = -inf*ones(1, auxdata.NMuscles);
-act2_upper = ones(1, auxdata.NMuscles)./auxdata.tauAct;
-bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
-bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
+act2_lower = -0.1*ones(1, auxdata.NMuscles);
+% !!!
+act2_upper = 0.97*ones(1, auxdata.NMuscles)./auxdata.tauAct;
+bounds.phase.path.lower = [ID_bounds,HillEquil ,act1_lower,act2_lower];
+bounds.phase.path.upper = [ID_bounds,HillEquil ,act1_upper,act2_upper];
+% extras in the constraints for implicit dynamics formulation
 
 % Eventgroup
 % Impose mild periodicity
@@ -1209,7 +1212,7 @@ setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
 setup.derivatives.derivativelevel = 'first'; % first / second
 setup.nlp.ipoptoptions.tolerance = 10^(-4);
-setup.nlp.ipoptoptions.maxiterations = 20000;
+setup.nlp.ipoptoptions.maxiterations = 10000;
 setup.derivatives.supplier = 'sparseCD'; % sparseCD / adigator
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
