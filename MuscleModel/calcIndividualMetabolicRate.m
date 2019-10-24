@@ -109,24 +109,40 @@ for m = 1:numMuscles
     rST = probeUmberger.getRatioSlowTwitchFibers(MuscleNames{m});
     param_rFT = 1 - rST;        % Proportion of fast-twitch muscle fibers
     
-    sigma = probeUmberger.getSpecificTension(MuscleNames{m}); % Specific tension [N/m^2]
+%     sigma = probeUmberger.getSpecificTension(MuscleNames{m}); % Specific tension [N/m^2]
+    sigma = 300000;
     PCSA = Fmax/sigma;      % Physiological cross sectional area [m^2]
     mass = PCSA*rho*Lceopt; % Muscle mass [kg]
     
     paramsUmb = struct('Lceopt',Lceopt, 'rFT',param_rFT, ...
                 'VceMax_LceoptsPerSecond',maxFiberVel, ...
                 'muscleMass',mass, 'scalingFactorS',1.5, ... % 1.5: aerobic.
-                'versionNumber',2010);
+                'versionNumber',2003); % 2010
     VCEmax_mps = paramsUmb.VceMax_LceoptsPerSecond * Lceopt; % [m/s]
     
     heatRates = NaN(numColPoints,5);
     for i = 1:numColPoints
+        % Lce = lMtilde(i,m)*Lceopt;
+        % Vce = vMtilde(i,m)*VCEmax_mps;
+        % heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F(i,m),Fiso(i,m),e(i,m),a(i,m),paramsUmb);
+        % going to try the tom recruitment thing
+        u_slow = sin((pi/2).*e(i,m));
+        u_fast = 1 - cos((pi/2).*e(i,m));
+        
+        if e(i,m) == 0
+            f_rec_slow = 1;
+        else
+            f_rec_slow = (rST*u_slow)/((rST*u_slow) + ((1-rST)*u_fast));
+        end
+        
+        param_rFT_new = 1 - f_rec_slow;
+        paramsUmb.rFT = param_rFT_new;
+        
         Lce = lMtilde(i,m)*Lceopt;
         Vce = vMtilde(i,m)*VCEmax_mps;
         heatRates(i,:) = calcUmbergerProbe(Lce,Vce,F(i,m),Fiso(i,m),e(i,m),a(i,m),paramsUmb);
     end
     musc_energy_rates(:,:,m) = heatRates(:,:) * mass;
-      
 end
 
 % heatRates = [Activation, Maintenance, Shortening/Lengthening (shortening

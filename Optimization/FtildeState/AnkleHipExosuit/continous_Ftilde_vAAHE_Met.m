@@ -46,43 +46,43 @@ phaseout.dynamics = [vA dFtilde];
 
 
 % OBJECTIVE FUNCTION
-% Calculate metabolic rate from Minetti & Alexander (1997) model
-vmax = params(5,:);  
-Fo = params(1,:);   
-Edot = zeros(numColPoints,NMuscles);
-for m = 1:NMuscles
-    v = vmax(1,m)*muscleData.vMtilde(:,m);
-    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
-end
-
-w_Edot = 1/input.auxdata.model_mass;
-w_Res = 5e3;
-w_Reg = 1e-4;
-
-
-
-phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
-                     w_Reg*(sum(dFtilde.^2,2) + sum(vA.^2, 2)); % + sum(e.^2,2));
-
-
-
-
-% Edot = zeros(numColPoints, NMuscles);
+% % Calculate metabolic rate from Minetti & Alexander (1997) model
+% vmax = params(5,:);  
+% Fo = params(1,:);   
+% Edot = zeros(numColPoints,NMuscles);
 % for m = 1:NMuscles
-%     Lce = muscleData.lMtilde(:,m)*params(2,m);
-%     Vce = muscleData.vMtilde(:,m)*params(5,m);
-% %     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
-%     paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
-%                    metabolicParams(3,m), metabolicParams(4,m), ...
-%                    metabolicParams(5,m)];
-%     Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
-%                                      Vce, ...
-%                                      max(0, muscleData.Fce(:,m)), ...
-%                                      max(0, muscleData.FMltilde(:,m)), ...
-%                                      min(max(0, a(:,m)), 1), ... % replaced excitation input w/ activation
-%                                      min(max(0, a(:,m)), 1), ...
-%                                      paramStruct);
+%     v = vmax(1,m)*muscleData.vMtilde(:,m);
+%     Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
 % end
+% 
+% w_Edot = 1/input.auxdata.model_mass;
+% w_Res = 5e3;
+% w_Reg = 1e-4;
+% 
+% 
+% 
+% phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
+%                      w_Reg*(sum(dFtilde.^2,2) + sum(vA.^2, 2)); % + sum(e.^2,2));
+
+
+
+
+Edot = zeros(numColPoints, NMuscles);
+for m = 1:NMuscles
+    Lce = muscleData.lMtilde(:,m)*params(2,m);
+    Vce = muscleData.vMtilde(:,m)*params(5,m);
+%     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
+    paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
+                   metabolicParams(3,m), metabolicParams(4,m), ...
+                   metabolicParams(5,m)];
+    Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
+                                     Vce, ...
+                                     max(0, muscleData.Fce(:,m)), ...
+                                     max(0, muscleData.FMltilde(:,m)), ...
+                                     min(max(0, a(:,m)), 1), ... % replaced excitation input w/ activation
+                                     min(max(0, a(:,m)), 1), ...
+                                     paramStruct);
+end
 % w_aT = 1000;
 % w_a = 0.05;
 % w_vA = 0.05;
@@ -96,6 +96,12 @@ phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
 % phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2)+ w_a*sum(a.^2,2) + ...
 %     w_vA*sum((vA/100).^2,2) + w_reg*(sum(dFtilde.^2, 2)); % + sum(e.^2, 2));
 %  
+w_Edot = 1/input.auxdata.model_mass;
+w_Res = 5e3;
+w_Reg = 1e-4;
+
+phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
+                     w_Reg*(sum(dFtilde.^2,2) + sum(vA.^2,2)); % + sum(e.^2,2));
 
 
 
