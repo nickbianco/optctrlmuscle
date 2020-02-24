@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vA_MinAlexGrdWrap(input)
+function phaseout = continous_FtildeExoTopology_Met_ActParamGrdWrap(input)
 
 persistent splinestruct
 
@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = continous_Ftilde_vA_MinAlexADiGatorGrd(input);
+phaseout = continous_FtildeExoTopology_Met_ActParamADiGatorGrd(input);

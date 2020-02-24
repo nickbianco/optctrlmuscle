@@ -2,6 +2,10 @@ function [calibratedModifiers] = PassiveMomentCalibration(model_fpath, auxdata, 
 
 import org.opensim.modeling.*
 model = Model(model_fpath);
+state = model.initSystem();
+auxdata.model_mass = model.getTotalMass(state);
+auxdata.generic_model_mass = 75.337;
+auxdata.mass_ratio = auxdata.model_mass / auxdata.generic_model_mass;
 
 % Get coordinate names -- we will need to set kinematics of all coordinates
 % for muscle length and moment arm calculations.
@@ -55,13 +59,14 @@ auxdata.indices = indices;
 % Set up calibration optimization problem
 numParams = numlMo + numlTs + nume0;
 x0 = ones(numParams, 1);
-lb = 0.75*x0;
-ub = 1.25*x0;
+lb = 0.95*x0;
+ub = 1.05*x0;
 
 options = optimoptions('fmincon', ...
                        'Display','iter', ...
                        'Algorithm','sqp', ...
                        'MaxFunctionEvaluations', 100000, ...
+                       'MaxIterations', 10000, ...
                        'Hessian', 'lbfgs');
 
 % Muscle passive fiber force is governed by the expression seen in
@@ -73,14 +78,17 @@ options = optimoptions('fmincon', ...
 %
 % Below are the ranges of e0 for the same range of x, [0.75 1.25], and the 
 % necessary linear equation coefficient values.
-% e0: [0.6 0.75]    --> m = 0.3, b = 0.375
+% e0: [0.6 0.9]     --> m = 0.6, b = 0.15
 % e0: [0.6 0.8]     --> m = 0.4, b = 0.3
+% e0: [0.6 0.75]    --> m = 0.3, b = 0.375
 % e0: [0.6 0.7]     --> m = 0.2, b = 0.45
 % e0: [0.55 0.65]   --> m = 0.2, b = 0.4
 % e0: [0.525 0.675] --> m = 0.3, b = 0.3
 % e0: [0.5 0.7]     --> m = 0.4, b = 0.2
-m = 0.3;
-b = 0.375;
+
+
+m = 3.0;
+b = -2.25;
 auxdata.e0LinCoefs.m = m;
 auxdata.e0LinCoefs.b = b;
  
@@ -90,8 +98,8 @@ isRigidTendon = true;
 
 % Optimize
 [x, res] = fmincon(@(x) obj(x, M, B, lMT, auxdata, isRigidTendon), x0, ...
-                   [],[],[],[], lb, ub, ...
-                   @(x) nonlincon(x, lMT, B, M, auxdata, isRigidTendon), options);
+           [],[],[],[], lb, ub, ...
+           @(x) nonlincon(x, lMT, B, M, auxdata, isRigidTendon), options);
 
 % Get results
 TendonForce = getForce(x, lMT, auxdata, isRigidTendon);

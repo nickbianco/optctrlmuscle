@@ -116,6 +116,14 @@ end
 if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
    Misc.Mesh_Frequency=100;
 end
+% Activation dynamics ('explicit' or 'implicit')
+if ~isfield(Misc,'actdyn') || isempty(Misc.actdyn)
+   Misc.actdyn = 'explicit';          
+end
+% Walking speed
+if ~isfield(Misc,'speed') || isempty(Misc.speed)
+   Misc.speed = 1.0;          
+end
 % Device force level for Quinlivan study
 if ~isfield(Misc,'exo_force_level') || isempty(Misc.exo_force_level)
    Misc.exo_force_level = -1;          
@@ -148,39 +156,41 @@ end
 if ~isfield(Misc, 'pennationAngleModifiers') || isempty(Misc.pennationAngleModifiers)
     Misc.pennationAngleModifiers = [];
 end
-% ExoTopology: DOF's assisted by passive device
-if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
-   Misc.passiveDOFs = []; 
-end
-% ExoTopology: DOF's assisted by active device
-if ~isfield(Misc, 'activeDOFs') || isempty(Misc.activeDOFs)
-   Misc.activeDOFs = []; 
-end
-% ExoTopology: fix moment arms to a constant value
-if ~isfield(Misc, 'fixMomentArms') || isempty(Misc.fixMomentArms)
-   Misc.fixMomentArms = []; 
-end
-% ExoTopology: fix a torque parameter to a constant value
-if ~isfield(Misc, 'fixParams') || isempty(Misc.fixParams)
-   Misc.fixParams = []; 
-end
-% ExoTopology: option to set individual control signals for each DOF
-if ~isfield(Misc, 'mult_controls') || isempty(Misc.mult_controls)
-   Misc.mult_controls = false; 
-end
-% ExoTopology: option to fix gains on experimental torque controls to be
-% the same across DOFs
-if ~isfield(Misc, 'same_torque_gain') || isempty(Misc.same_torque_gain)
-   Misc.same_torque_gain = false; 
-end
-% Shift prescribed exoskeleton torque peaks to match ID peaks
-if ~isfield(Misc, 'shift_exo_peaks') || isempty(Misc.shift_exo_peaks)
-   Misc.shift_exo_peaks = false;
-   auxdata.shift_exo_peaks = false;
-end
-% ExoTopology (ActParam): guess for Zhang2017 parameterization
-if ~isfield(Misc, 'paramGuess') || isempty(Misc.paramGuess)
-   Misc.paramGuess = []; 
+if strcmp(study{2},'Topology')
+    % ExoTopology: DOF's assisted by passive device
+    if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
+       Misc.passiveDOFs = []; 
+    end
+    % ExoTopology: DOF's assisted by active device
+    if ~isfield(Misc, 'activeDOFs') || isempty(Misc.activeDOFs)
+       Misc.activeDOFs = []; 
+    end
+    % ExoTopology: fix moment arms to a constant value
+    if ~isfield(Misc, 'fixMomentArms') || isempty(Misc.fixMomentArms)
+       Misc.fixMomentArms = []; 
+    end
+    % ExoTopology: fix a torque parameter to a constant value
+    if ~isfield(Misc, 'fixParams') || isempty(Misc.fixParams)
+       Misc.fixParams = []; 
+    end
+    % ExoTopology: option to set individual control signals for each DOF
+    if ~isfield(Misc, 'mult_controls') || isempty(Misc.mult_controls)
+       Misc.mult_controls = false; 
+    end
+    % ExoTopology: option to fix gains on experimental torque controls to be
+    % the same across DOFs
+    if ~isfield(Misc, 'same_torque_gain') || isempty(Misc.same_torque_gain)
+       Misc.same_torque_gain = false; 
+    end
+    % ExoTopology: shift prescribed exoskeleton torque peaks to match ID peaks
+    if ~isfield(Misc, 'shift_exo_peaks') || isempty(Misc.shift_exo_peaks)
+       Misc.shift_exo_peaks = false;
+       auxdata.shift_exo_peaks = false;
+    end
+    % ExoTopology (ActParam): guess for Zhang2017 parameterization
+    if ~isfield(Misc, 'paramGuess') || isempty(Misc.paramGuess)
+       Misc.paramGuess = []; 
+    end
 end
 
 % ----------------------------------------------------------------------- %
@@ -191,7 +201,7 @@ if ~strcmp(study{2},'Topology')
     
     for i = 1:length(exoFlags) 
         errmsg = [study{2} ': flag ' exoFlags{i} ' unused'];
-        assert(isempty(Misc.(exoFlags{i})), errmsg)
+        assert(~isfield(Misc, exoFlags{i}), errmsg)
     end
 end
 
@@ -245,7 +255,9 @@ end
 % The solution of the static optimization is used as initial guess for the
 % dynamic optimization
 % Extract the muscle-tendon properties
-[DatStore.params,DatStore.lOpt,DatStore.L_TendonSlack,DatStore.Fiso,DatStore.PennationAngle,DatStore.metabolicParams]=ReadMuscleParameters(model_path,DatStore.MuscleNames);
+[DatStore.params, DatStore.lOpt, DatStore.L_TendonSlack, DatStore.Fiso, ... 
+    DatStore.PennationAngle, DatStore.metabolicParams] = ...
+        ReadMuscleParameters(model_path,DatStore.MuscleNames);
 
 % Modify tendon stiffnesses
 fprintf('Muscles with modified tendon stiffness: \n')
@@ -291,7 +303,7 @@ end
 fprintf('\n')
 
 % Static optimization using IPOPT solver
-DatStore = SolveStaticOptimization_IPOPT(DatStore);
+% DatStore = SolveStaticOptimization_IPOPT(DatStore);
 
 
 %% ---------------------------------------------------------------------- %
@@ -307,7 +319,9 @@ auxdata.Ndof = DatStore.nDOF;           % humber of dofs
 % DatStore.time = DatStore.time;          % time window
 auxdata.ID = DatStore.T_exp;            % inverse dynamics
 auxdata.params = DatStore.params;       % Muscle-tendon parameters
-auxdata.metabolicParams = DatStore.metabolicParams; % Parameters for calculating metabolic cost
+ % Parameters for calculating metabolic cost
+auxdata.metabolicParams = DatStore.metabolicParams;
+auxdata.speed = Misc.speed;             % walking speed
 
 % ExoTopology study: handling possible active + passive device cases
 % Create indicies for parameter array
@@ -317,11 +331,10 @@ model_mass = model.getTotalMass(state);
 auxdata.model_mass = model_mass;
 auxdata.numActiveDOFs = 1;
 config = ReadYaml('C:\Users\Nick\Projects\ExoTopology\exotopology\config.yaml');
-norm_max_torque = config.norm_max_torque; % N-m/kg
-
-if strcmp(study{2}, 'Topology')
-    auxdata.hasActiveDevice = false;
-    auxdata.hasPassiveDevice = false;
+norm_hip_max_torque = config.norm_hip_max_torque; % N-m/kg
+norm_knee_max_torque = config.norm_knee_max_torque; % N-m/kg
+norm_ankle_max_torque = config.norm_ankle_max_torque; % N-m/kg
+if strcmp(study{2}, 'Topology')  
     minMomentArm = 0.05;
     maxMomentArm = 1.00;
     
@@ -329,10 +342,12 @@ if strcmp(study{2}, 'Topology')
     paramsLower = [];
     paramsUpper = [];
     paramsGuess = [];
+    isBidirectional = [];
     % Active device indicies
     if ~isempty(Misc.activeDOFs)
-        auxdata.hasActiveDevice = true;
-        auxdata.Tmax_act = norm_max_torque * model_mass;
+        auxdata.Tmax_act_hip = norm_hip_max_torque * model_mass;
+        auxdata.Tmax_act_knee = norm_knee_max_torque * model_mass;
+        auxdata.Tmax_act_ankle = norm_ankle_max_torque * model_mass;
         auxdata.active.hip = 0;
         auxdata.active.knee = 0;
         auxdata.active.ankle = 0;
@@ -344,6 +359,12 @@ if strcmp(study{2}, 'Topology')
                     auxdata.active.hip = numExoParams;
                     paramsLower(numExoParams) = -1.0; %#ok<*AGROW>
                     paramsUpper(numExoParams) = 1.0;
+                    isBidirectional(numExoParams) = 0;
+                    if ~isempty(Misc.fixMomentArms)
+                        paramsLower(numExoParams) = Misc.fixMomentArms;
+                        paramsUpper(numExoParams) = Misc.fixMomentArms;
+                        paramsGuess(numExoParams) = Misc.fixMomentArms;
+                    end
                     if length(dofInfo) > 1
                         switch dofInfo{2}
                             case 'flex'
@@ -365,12 +386,21 @@ if strcmp(study{2}, 'Topology')
                                     paramsUpper(numExoParams) = -minMomentArm;
                                 end
                         end
+                    else
+                        assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                        isBidirectional(numExoParams) = 1;
                     end
                 case 'knee'
                     numExoParams = numExoParams + 1;
                     auxdata.active.knee = numExoParams;
                     paramsLower(numExoParams) = -1.0;
                     paramsUpper(numExoParams) = 1.0;
+                    isBidirectional(numExoParams) = 0;
+                    if ~isempty(Misc.fixMomentArms)
+                        paramsLower(numExoParams) = Misc.fixMomentArms;
+                        paramsUpper(numExoParams) = Misc.fixMomentArms;
+                        paramsGuess(numExoParams) = Misc.fixMomentArms;
+                    end
                     if length(dofInfo) > 1
                         switch dofInfo{2}
                             case 'ext'
@@ -392,12 +422,21 @@ if strcmp(study{2}, 'Topology')
                                     paramsUpper(numExoParams) = -minMomentArm;
                                 end
                         end
+                    else
+                        assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                        isBidirectional(numExoParams) = 1;
                     end
                 case 'ankle'
                     numExoParams = numExoParams + 1;
                     auxdata.active.ankle = numExoParams;
                     paramsLower(numExoParams) = -1.0;
                     paramsUpper(numExoParams) = 1.0;
+                    isBidirectional(numExoParams) = 0;
+                    if ~isempty(Misc.fixMomentArms)
+                        paramsLower(numExoParams) = Misc.fixMomentArms;
+                        paramsUpper(numExoParams) = Misc.fixMomentArms;
+                        paramsGuess(numExoParams) = Misc.fixMomentArms;
+                    end
                     if length(dofInfo) > 1
                         switch dofInfo{2}
                             case 'dorsi'
@@ -419,6 +458,9 @@ if strcmp(study{2}, 'Topology')
                                     paramsUpper(numExoParams) = -minMomentArm;
                                 end
                         end
+                    else
+                        assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                        isBidirectional(numExoParams) = 1;
                     end
             end
         end
@@ -426,106 +468,13 @@ if strcmp(study{2}, 'Topology')
             auxdata.numActiveDOFs = numExoParams;
         end
     end
-    % Passive device indicies
-%     if ~isempty(Misc.passiveDOFs)
-%         auxdata.hasPassiveDevice = true;
-%         auxdata.passiveStiffness = 1250*auxdata.model_mass; % k ~= 100 kN/m for 80kg subject (van den Bogert 2003) 
-%         auxdata.passive.hip = 0;
-%         auxdata.passive.knee = 0;
-%         auxdata.passive.ankle = 0;
-%         for i = 1:length(Misc.passiveDOFs)
-%             dofInfo = split(Misc.passiveDOFs{i},'/');
-%             switch dofInfo{1}
-%                 case 'hip'
-%                     numExoParams = numExoParams + 1;
-%                     auxdata.passive.hip = numExoParams;
-%                     paramsLower(numExoParams) = -0.10;
-%                     paramsUpper(numExoParams) = 0.10;
-%                     if length(dofInfo) > 1
-%                         switch dofInfo{2}
-%                             case 'flex'
-%                                 if ~isempty(Misc.fixMomentArms)
-%                                     paramsLower(numExoParams) = Misc.fixMomentArms;
-%                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
-%                                 else
-%                                     paramsLower(numExoParams) = 0;
-%                                     paramsUpper(numExoParams) = maxMomentArm;
-%                                 end
-%                             case 'ext'
-%                                 if ~isempty(Misc.fixMomentArms)
-%                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
-%                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
-%                                 else
-%                                     paramsLower(numExoParams) = -maxMomentArm;
-%                                     paramsUpper(numExoParams) = 0;
-%                                 end
-%                         end
-%                     end
-%                 case 'knee'
-%                     numExoParams = numExoParams + 1;
-%                     auxdata.passive.knee = numExoParams;
-%                     paramsLower(numExoParams) = -0.10;
-%                     paramsUpper(numExoParams) = 0.10;
-%                     if length(dofInfo) > 1
-%                         switch dofInfo{2}
-%                             case 'ext'
-%                                 if ~isempty(Misc.fixMomentArms)
-%                                     paramsLower(numExoParams) = Misc.fixMomentArms;
-%                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
-%                                 else
-%                                     paramsLower(numExoParams) = 0;
-%                                     paramsUpper(numExoParams) = maxMomentArm;
-%                                 end
-%                             case 'flex'
-%                                 if ~isempty(Misc.fixMomentArms)
-%                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
-%                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
-%                                 else
-%                                     paramsLower(numExoParams) = -maxMomentArm;
-%                                     paramsUpper(numExoParams) = 0;
-%                                 end
-%                         end
-%                     end
-%                     
-%                 case 'ankle'
-%                     numExoParams = numExoParams + 1;
-%                     auxdata.passive.ankle = numExoParams;
-%                     paramsLower(numExoParams) = -0.10;
-%                     paramsUpper(numExoParams) = 0.10;
-%                     if length(dofInfo) > 1
-%                         switch dofInfo{2}
-%                             case 'dorsi'
-%                                 if ~isempty(Misc.fixMomentArms)
-%                                     paramsLower(numExoParams) = Misc.fixMomentArms;
-%                                     paramsUpper(numExoParams) = Misc.fixMomentArms;
-%                                 else
-%                                     paramsLower(numExoParams) = 0;
-%                                     paramsUpper(numExoParams) = maxMomentArm;
-%                                 end
-%                             case 'plantar'
-%                                 if ~isempty(Misc.fixMomentArms)
-%                                     paramsLower(numExoParams) = -Misc.fixMomentArms;
-%                                     paramsUpper(numExoParams) = -Misc.fixMomentArms;
-%                                 else
-%                                     paramsLower(numExoParams) = -maxMomentArm;
-%                                     paramsUpper(numExoParams) = 0;
-%                                 end
-%                         end
-%                     end
-%             end
-%         end
-%         % Extra index for exotendon slack length
-%         numExoParams = numExoParams + 1;
-%         paramsLower(numExoParams) = 0.75;
-%         paramsUpper(numExoParams) = 1.25;
-%         auxdata.passive.slack_length = numExoParams;
-%     end
     
     % Pass parameter index info to auxdata so it can be used in static
     % optimization initial guess
     auxdata.numExoParams = numExoParams;
     auxdata.paramsLower = paramsLower;
     auxdata.paramsUpper = paramsUpper;
+    auxdata.isBidirectional = isBidirectional;
     auxdata.subcase = Misc.subcase;
     
     % Pass whether or not exoskeleton torques should be shifted based on 
@@ -567,11 +516,14 @@ if strcmp(Misc.subcase, 'ActParam')
             if contains(DatStore.DOFNames{dof}, dofInfo{1})
                 switch dofInfo{1}
                     case 'hip'
-                        auxdata.signMoment.hip = sign(auxdata.paramsUpper(auxdata.active.hip));
+                        auxdata.signMoment.hip = ...
+                            sign(auxdata.paramsUpper(auxdata.active.hip));
                     case 'knee'
-                        auxdata.signMoment.knee = auxdata.kneeAngleSign*sign(auxdata.paramsUpper(auxdata.active.knee));
+                        auxdata.signMoment.knee = auxdata.kneeAngleSign * ...
+                            sign(auxdata.paramsUpper(auxdata.active.knee));
                     case 'ankle'
-                        auxdata.signMoment.ankle = sign(auxdata.paramsUpper(auxdata.active.ankle));
+                        auxdata.signMoment.ankle =...
+                            sign(auxdata.paramsUpper(auxdata.active.ankle));
                 end
             end
         end
@@ -581,16 +533,14 @@ if strcmp(Misc.subcase, 'ActParam')
     paramsLower = [];
     paramsUpper = [];
     paramsGuess = [];
-    paramNames = {};
-    
+    paramNames = {};    
     % Get parameter bounds from config file
     config = ReadYaml('C:\Users\Nick\Projects\ExoTopology\exotopology\config.yaml');
     peak_torque = config.param_bounds.peak_torque;
     peak_time = config.param_bounds.peak_time;
+    ext_peak_time = config.param_bounds.peak_time;
     rise_time = config.param_bounds.rise_time;
     fall_time = config.param_bounds.fall_time;
-    knee_torque_scale = config.param_bounds.knee_torque_scale;
-    ankle_torque_scale = config.param_bounds.ankle_torque_scale;
     
     % Get results from curve fitting step
     fitopt = load(Misc.fitopt_path);
@@ -598,7 +548,8 @@ if strcmp(Misc.subcase, 'ActParam')
     
     % Set deviation parameter to dictate how much parameters can vary from their
     % curve fitted values.
-    dev = 0.10;
+    dev = 0.25;
+    peak_torque_dev = 0.25;
     
     % Fix parameter 
     if ~isempty(Misc.fixParams) 
@@ -622,13 +573,13 @@ if strcmp(Misc.subcase, 'ActParam')
                    fall_time{1} = value;
                    fall_time{2} = value;
                    x(4) = value;
-               case 'knee_torque_scale'
-                   knee_torque_scale{1} = value;
-                   knee_torque_scale{2} = value;
+               case 'knee_peak_torque'
+                   knee_peak_torque{1} = value;
+                   knee_peak_torque{2} = value;
                    x(5) = value;
-               case 'ankle_torque_scale'
-                   ankle_torque_scale{1} = value;
-                   ankle_torque_scale{2} = value;
+               case 'ankle_peak_torque'
+                   ankle_peak_torque{1} = value;
+                   ankle_peak_torque{2} = value;
                    if strcmp(Misc.mod_name,'fitreopt_zhang2017_actHfKfAp')
                        x(6) = value;
                    else
@@ -645,20 +596,26 @@ if strcmp(Misc.subcase, 'ActParam')
     paramNames{1} = 'peak torque';
     numExoParams = numExoParams + 1;
     auxdata.active.params.peak_torque.idx = numExoParams;
-    paramsLower(numExoParams) = max(x(1) - dev*(ub(1)-lb(1)), lb(1));
-    paramsUpper(numExoParams) = min(x(1) + dev*(ub(1)-lb(1)), ub(1));
+    paramsLower(numExoParams) = max(x(1) - peak_torque_dev*(ub(1)-lb(1)), lb(1));
+    paramsUpper(numExoParams) = min(x(1) + peak_torque_dev*(ub(1)-lb(1)), ub(1));
     paramsGuess(numExoParams) = x(1);
 
     % peak time
-    lb(2) = peak_time{1};
-    ub(2) = peak_time{2};
+    if (strcmp(Misc.mod_name,'fitreopt_zhang2017_actHe') || ...
+        strcmp(Misc.mod_name,'fitreopt_zhang2017_actKe'))
+        lb(2) = ext_peak_time{1};
+        ub(2) = ext_peak_time{2};
+    else
+        lb(2) = peak_time{1};
+        ub(2) = peak_time{2};
+    end
     paramNames{2} = 'peak time';
     numExoParams = numExoParams + 1;
     auxdata.active.params.peak_time.idx = numExoParams;
     paramsLower(numExoParams) = max(x(2) - dev*(ub(2)-lb(2)), lb(2));
     paramsUpper(numExoParams) = min(x(2) + dev*(ub(2)-lb(2)), ub(2));
     paramsGuess(numExoParams) = x(2);
-    
+
     % rise time
     lb(3) = rise_time{1};
     ub(3) = rise_time{2};
@@ -678,72 +635,165 @@ if strcmp(Misc.subcase, 'ActParam')
     paramsLower(numExoParams) = max(x(4) - dev*(ub(4)-lb(4)), lb(4));
     paramsUpper(numExoParams) = min(x(4) + dev*(ub(4)-lb(4)), ub(4));
     paramsGuess(numExoParams) = x(4);
-    
+        
     if strcmp(Misc.mod_name,'fitreopt_zhang2017_actHfAp')
-        % ankle torque scale
-        lb(5) = ankle_torque_scale{1};
-        ub(5) = ankle_torque_scale{2};
-        paramNames{5} = 'ankle torque scale';
-        numExoParams = numExoParams + 1;
-        auxdata.active.params.ankle_torque_scale.idx = numExoParams;
-        paramsLower(numExoParams) = max(x(5) - dev*(ub(5)-lb(5)), lb(5));
-        paramsUpper(numExoParams) = min(x(5) + dev*(ub(5)-lb(5)), ub(5));
-        paramsGuess(numExoParams) = x(5);
         
+        % ankle peak torque
+        lb(5) = peak_torque{1};
+        ub(5) = peak_torque{2};
+        paramNames{5} = 'ankle peak torque';
+        numExoParams = numExoParams + 1;
+        auxdata.active.params.ankle_peak_torque.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(5) - peak_torque_dev*(ub(5)-lb(5)), lb(5));
+        paramsUpper(numExoParams) = min(x(5) + peak_torque_dev*(ub(5)-lb(5)), ub(5));
+        paramsGuess(numExoParams) = x(5);
+                
     elseif strcmp(Misc.mod_name,'fitreopt_zhang2017_actHfKf')
-        % knee torque scale
-        lb(5) = knee_torque_scale{1};
-        ub(5) = knee_torque_scale{2};
-        paramNames{5} = 'knee torque scale';
-        numExoParams = numExoParams + 1;
-        auxdata.active.params.knee_torque_scale.idx = numExoParams;
-        paramsLower(numExoParams) = max(x(5) - dev*(ub(5)-lb(5)), lb(5));
-        paramsUpper(numExoParams) = min(x(5) + dev*(ub(5)-lb(5)), ub(5));
-        paramsGuess(numExoParams) = x(5);
         
+        % knee peak torque
+        lb(5) = peak_torque{1};
+        ub(5) = peak_torque{2};
+        paramNames{5} = 'knee peak torque';
+        numExoParams = numExoParams + 1;
+        auxdata.active.params.knee_peak_torque.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(5) - peak_torque_dev*(ub(5)-lb(5)), lb(5));
+        paramsUpper(numExoParams) = min(x(5) + peak_torque_dev*(ub(5)-lb(5)), ub(5));
+        paramsGuess(numExoParams) = x(5);
+                
     elseif strcmp(Misc.mod_name,'fitreopt_zhang2017_actKfAp')
-        % ankle torque scale
-        lb(5) = ankle_torque_scale{1};
-        ub(5) = ankle_torque_scale{2};
-        paramNames{5} = 'ankle torque scale';
+        
+        % ankle peak torque
+        lb(5) = peak_torque{1};
+        ub(5) = peak_torque{2};
+        paramNames{5} = 'ankle peak torque';
         numExoParams = numExoParams + 1;
-        auxdata.active.params.ankle_torque_scale.idx = numExoParams;
-        paramsLower(numExoParams) = max(x(5) - dev*(ub(5)-lb(5)), lb(5));
-        paramsUpper(numExoParams) = min(x(5) + dev*(ub(5)-lb(5)), ub(5));
+        auxdata.active.params.ankle_peak_torque.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(5) - peak_torque_dev*(ub(5)-lb(5)), lb(5));
+        paramsUpper(numExoParams) = min(x(5) + peak_torque_dev*(ub(5)-lb(5)), ub(5));
         paramsGuess(numExoParams) = x(5);
-   
+           
     elseif strcmp(Misc.mod_name,'fitreopt_zhang2017_actHfKfAp')
-        % knee torque scale
-        lb(5) = knee_torque_scale{1};
-        ub(5) = knee_torque_scale{2};
-        paramNames{5} = 'knee torque scale';
+        
+        % knee peak torque
+        lb(5) = peak_torque{1};
+        ub(5) = peak_torque{2};
+        paramNames{5} = 'knee peak torque';
         numExoParams = numExoParams + 1;
-        auxdata.active.params.knee_torque_scale.idx = numExoParams;
-        paramsLower(numExoParams) = max(x(5) - dev*(ub(5)-lb(5)), lb(5));
-        paramsUpper(numExoParams) = min(x(5) + dev*(ub(5)-lb(5)), ub(5));
+        auxdata.active.params.knee_peak_torque.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(5) - peak_torque_dev*(ub(5)-lb(5)), lb(5));
+        paramsUpper(numExoParams) = min(x(5) + peak_torque_dev*(ub(5)-lb(5)), ub(5));
         paramsGuess(numExoParams) = x(5);
         
-        % ankle torque scale
-        lb(6) = ankle_torque_scale{1};
-        ub(6) = ankle_torque_scale{2};
-        paramNames{6} = 'ankle torque scale';
+        % ankle peak torque         
+        lb(6) = peak_torque{1};
+        ub(6) = peak_torque{2};
+        paramNames{6} = 'ankle peak torque';
         numExoParams = numExoParams + 1;
-        auxdata.active.params.ankle_torque_scale.idx = numExoParams;
+        auxdata.active.params.ankle_peak_torque.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(6) - peak_torque_dev*(ub(6)-lb(6)), lb(6));
+        paramsUpper(numExoParams) = min(x(6) + peak_torque_dev*(ub(6)-lb(6)), ub(6));
+        paramsGuess(numExoParams) = x(6);
+                        
+    elseif strcmp(Misc.mod_name,'fitreopt_zhang2017_actHeKe')
+
+        % knee peak torque
+        lb(5) = peak_torque{1};
+        ub(5) = peak_torque{2};
+        paramNames{5} = 'knee peak torque';
+        numExoParams = numExoParams + 1;
+        auxdata.active.params.knee_peak_torque.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(5) - peak_torque_dev*(ub(5)-lb(5)), lb(5));
+        paramsUpper(numExoParams) = min(x(5) + peak_torque_dev*(ub(5)-lb(5)), ub(5));
+        paramsGuess(numExoParams) = x(5);
+                
+    elseif contains(Misc.mod_name, 'multControls')
+                
+        % peak torque
+        lb(5) = peak_torque{1};
+        ub(5) = peak_torque{2};
+        paramNames{5} = 'peak torque 2';
+        numExoParams = numExoParams + 1;
+        auxdata.active.params.peak_torque_2.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(5) - peak_torque_dev*(ub(5)-lb(5)), lb(5));
+        paramsUpper(numExoParams) = min(x(5) + peak_torque_dev*(ub(5)-lb(5)), ub(5));
+        paramsGuess(numExoParams) = x(5);
+        
+        % peak time
+        if strcmp(Misc.mod_name,'fitreopt_zhang2017_actHeKe_multControls')
+            lb(6) = ext_peak_time{1};
+            ub(6) = ext_peak_time{2};
+        else
+            lb(6) = peak_time{1};
+            ub(6) = peak_time{2};
+        end
+        paramNames{6} = 'peak time 2';
+        numExoParams = numExoParams + 1;
+        auxdata.active.params.peak_time_2.idx = numExoParams;
         paramsLower(numExoParams) = max(x(6) - dev*(ub(6)-lb(6)), lb(6));
         paramsUpper(numExoParams) = min(x(6) + dev*(ub(6)-lb(6)), ub(6));
         paramsGuess(numExoParams) = x(6);
-                
-    elseif strcmp(Misc.mod_name,'fitreopt_zhang2017_actHeKe')
-        % knee torque scale
-        lb(5) = knee_torque_scale{1};
-        ub(5) = knee_torque_scale{2};
-        paramNames{5} = 'knee torque scale';
+
+        % rise time
+        lb(7) = rise_time{1};
+        ub(7) = rise_time{2};
+        paramNames{7} = 'rise time 2';
         numExoParams = numExoParams + 1;
-        auxdata.active.params.knee_torque_scale.idx = numExoParams;
-        paramsLower(numExoParams) = max(x(5) - dev*(ub(5)-lb(5)), lb(5));
-        paramsUpper(numExoParams) = min(x(5) + dev*(ub(5)-lb(5)), ub(5));
-        paramsGuess(numExoParams) = x(5);
-     
+        auxdata.active.params.rise_time_2.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(7) - dev*(ub(7)-lb(7)), lb(7));
+        paramsUpper(numExoParams) = min(x(7) + dev*(ub(7)-lb(7)), ub(7));
+        paramsGuess(numExoParams) = x(7);
+
+        % fall time
+        lb(8) = fall_time{1};
+        ub(8) = fall_time{2};
+        paramNames{8} = 'fall time 2';
+        numExoParams = numExoParams + 1;
+        auxdata.active.params.fall_time_2.idx = numExoParams;
+        paramsLower(numExoParams) = max(x(8) - dev*(ub(8)-lb(8)), lb(8));
+        paramsUpper(numExoParams) = min(x(8) + dev*(ub(8)-lb(8)), ub(8));
+        paramsGuess(numExoParams) = x(8);
+                    
+       if strcmp(Misc.mod_name,'fitreopt_zhang2017_actHfKfAp_multControls')
+           % peak torque
+            lb(9) = peak_torque{1};
+            ub(9) = peak_torque{2};
+            paramNames{9} = 'peak torque 3';
+            numExoParams = numExoParams + 1;
+            auxdata.active.params.peak_torque_3.idx = numExoParams;
+            paramsLower(numExoParams) = max(x(9) - peak_torque_dev*(ub(9)-lb(9)), lb(9));
+            paramsUpper(numExoParams) = min(x(9) + peak_torque_dev*(ub(9)-lb(9)), ub(9));
+            paramsGuess(numExoParams) = x(9);
+
+            % peak time
+            lb(10) = peak_time{1};
+            ub(10) = peak_time{2};
+            paramNames{10} = 'peak time 3';
+            numExoParams = numExoParams + 1;
+            auxdata.active.params.peak_time_3.idx = numExoParams;
+            paramsLower(numExoParams) = max(x(10) - dev*(ub(10)-lb(10)), lb(10));
+            paramsUpper(numExoParams) = min(x(10) + dev*(ub(10)-lb(10)), ub(10));
+            paramsGuess(numExoParams) = x(10);
+
+            % rise time
+            lb(11) = rise_time{1};
+            ub(11) = rise_time{2};
+            paramNames{11} = 'rise time 3';
+            numExoParams = numExoParams + 1;
+            auxdata.active.params.rise_time_3.idx = numExoParams;
+            paramsLower(numExoParams) = max(x(11) - dev*(ub(11)-lb(11)), lb(11));
+            paramsUpper(numExoParams) = min(x(11) + dev*(ub(11)-lb(11)), ub(11));
+            paramsGuess(numExoParams) = x(11);
+
+            % fall time
+            lb(12) = fall_time{1};
+            ub(12) = fall_time{2};
+            paramNames{12} = 'fall time 3';
+            numExoParams = numExoParams + 1;
+            auxdata.active.params.fall_time_3.idx = numExoParams;
+            paramsLower(numExoParams) = max(x(12) - dev*(ub(12)-lb(12)), lb(12));
+            paramsUpper(numExoParams) = min(x(12) + dev*(ub(12)-lb(12)), ub(12));
+            paramsGuess(numExoParams) = x(12);
+       end
     end
     
     % Overwrite auxdata fields from non-parameterized cases
@@ -784,18 +834,8 @@ t50 = exp(kpe .* (0.2 - 0.10e1) ./ e0);
 pp1 = (t50 - 0.10e1); t7 = exp(kpe); pp2 = (t7 - 0.10e1);
 auxdata.Fpparam = [pp1;pp2;ones(1,length(pp1))*Misc.tendonStiffnessCoeff];
 
-% Solve static optimization problem with devices for ExoTopology study to
-% improve quality of initial guesses
-if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'ActParam') && ~strcmp(Misc.subcase, 'Exp') && ~strcmp(Misc.subcase, 'FitOpt')
-    DatStore = SolveStaticOptimization_ExoTopology(DatStore, auxdata, Misc);
-end
-
 % Problem bounds 
-a_min = 0; a_max = 1;             % bounds on muscle activation
-vA_min = -1/100; vA_max = 1/100;  % bounds on derivative of muscle activation
-F_min = 0; F_max = 5;             % bounds on normalized tendon force
-dF_min = -100; dF_max = 100;      % bounds on derivative of normalzied tendon force
-
+% --------------
 % Time bounds
 t0 = DatStore.time(1); 
 tf = DatStore.time(end);
@@ -807,30 +847,50 @@ auxdata.initialtime = t0;
 auxdata.finaltime = tf;
 
 % Controls bounds
-vAmin = vA_min./auxdata.tauDeact;
-vAmax = vA_max./auxdata.tauAct;
+N = length(DatStore.time);
+vA_min = -1/100; vA_max = 1/100;  % bounds on derivative of muscle activation (if implicit)
+e_min = 0; e_max = 1;             % bounds on excitation (if explicit)
+dF_min = -100; dF_max = 100;      % bounds on derivative of normalzied tendon force
+actdyn = Misc.actdyn;
+auxdata.actdyn = actdyn;
+if strcmp(actdyn, 'implicit')
+    umin = vA_min./auxdata.tauDeact;
+    umax = vA_max./auxdata.tauAct;
+    uguess = zeros(N,auxdata.NMuscles);
+elseif strcmp(actdyn, 'explicit')
+    umin = e_min*ones(1,auxdata.NMuscles); 
+    umax = e_max*ones(1,auxdata.NMuscles);
+    uguess = 0.1*ones(N,auxdata.NMuscles);
+end
 dFMin = dF_min*ones(1,auxdata.NMuscles);
 dFMax = dF_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); 
 aTmax = 1*ones(1,auxdata.Ndof);
 aDmin = zeros(1, auxdata.numActiveDOFs); 
 aDmax = ones(1, auxdata.numActiveDOFs);
+for i = 1:auxdata.numActiveDOFs
+    if auxdata.isBidirectional(i) 
+       aDmin(i) = -1; 
+    end
+end
 if strcmp(study{2},'Topology')
-    if auxdata.hasActiveDevice && ~strcmp(Misc.subcase, 'ActParam') && ~strcmp(Misc.subcase, 'Exp') && ~strcmp(Misc.subcase, 'FitOpt')
-        control_bounds_lower = [vAmin aTmin dFMin aDmin];
-        control_bounds_upper = [vAmax aTmax dFMax aDmax];
+    if ~strcmp(Misc.subcase, 'ActParam')
+        control_bounds_lower = [umin aTmin dFMin aDmin];
+        control_bounds_upper = [umax aTmax dFMax aDmax];
     else
-        control_bounds_lower = [vAmin aTmin dFMin];
-        control_bounds_upper = [vAmax aTmax dFMax];
+        control_bounds_lower = [umin aTmin dFMin];
+        control_bounds_upper = [umax aTmax dFMax];
     end
 else
-    control_bounds_lower = [vAmin aTmin dFMin];
-    control_bounds_upper = [vAmax aTmax dFMax];
+    control_bounds_lower = [umin aTmin dFMin];
+    control_bounds_upper = [umax aTmax dFMax];
 end
 bounds.phase.control.lower = control_bounds_lower; 
 bounds.phase.control.upper = control_bounds_upper;
 
 % States bounds
+a_min = 0; a_max = 1;             % bounds on muscle activation
+F_min = 0; F_max = 5;             % bounds on normalized tendon force
 actMin = a_min*ones(1,auxdata.NMuscles); 
 actMax = a_max*ones(1,auxdata.NMuscles);
 F0min = F_min*ones(1,auxdata.NMuscles);
@@ -839,24 +899,33 @@ Ffmin = F_min*ones(1,auxdata.NMuscles);
 Ffmax = F_max*ones(1,auxdata.NMuscles);
 FMin = F_min*ones(1,auxdata.NMuscles);
 FMax = F_max*ones(1,auxdata.NMuscles);
-bounds.phase.initialstate.lower = [actMin, F0min]; 
-bounds.phase.initialstate.upper = [actMax, F0max];
-bounds.phase.state.lower = [actMin, FMin]; 
-bounds.phase.state.upper = [actMax, FMax];
-bounds.phase.finalstate.lower = [actMin, Ffmin]; 
-bounds.phase.finalstate.upper = [actMax, Ffmax];
+if strcmp(study{2}, 'Topology')
+    bounds.phase.initialstate.lower = [actMin, F0min, aDmin];
+    bounds.phase.initialstate.upper = [actMax, F0max, aDmax];
+    bounds.phase.state.lower = [actMin, FMin, aDmin];
+    bounds.phase.state.upper = [actMax, FMax, aDmax];
+    bounds.phase.finalstate.lower = [actMin, Ffmin, aDmin];
+    bounds.phase.finalstate.upper = [actMax, Ffmax, aDmax];
+else
+    bounds.phase.initialstate.lower = [actMin, F0min];
+    bounds.phase.initialstate.upper = [actMax, F0max];
+    bounds.phase.state.lower = [actMin, FMin];
+    bounds.phase.state.upper = [actMax, FMax];
+    bounds.phase.finalstate.lower = [actMin, Ffmin];
+    bounds.phase.finalstate.upper = [actMax, Ffmax];
+end
 
 % Integral bounds
 bounds.phase.integral.lower = 0;
 bounds.phase.integral.upper = 10000*(tf-t0);
 
 % Parameter bounds
-if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'FitOpt')
+if strcmp(study{2},'Topology')
     % Parameter variable in the optimization problem always lie in the range 
-    % [-1 1], and should be converted as necessary in the continuous function
+    % [-0.5 0.5], and should be converted as necessary in the continuous function
     % for to make the correct computations.
-    bounds.parameter.lower = -1*ones(size(auxdata.paramsLower));
-    bounds.parameter.upper = 1*ones(size(auxdata.paramsUpper));   
+    bounds.parameter.lower = -0.5*ones(size(auxdata.paramsLower));
+    bounds.parameter.upper = 0.5*ones(size(auxdata.paramsUpper));
 end
 
 % Path constraints
@@ -866,8 +935,13 @@ act1_lower = zeros(1, auxdata.NMuscles);
 act1_upper = inf*ones(1, auxdata.NMuscles);
 act2_lower = -inf*ones(1, auxdata.NMuscles);
 act2_upper = 1*ones(1, auxdata.NMuscles)./auxdata.tauAct;
-bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
-bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
+if strcmp(actdyn, 'implicit')
+    bounds.phase.path.lower = [ID_bounds,HillEquil,act1_lower,act2_lower];
+    bounds.phase.path.upper = [ID_bounds,HillEquil,act1_upper,act2_upper];
+elseif strcmp(actdyn, 'explicit')
+    bounds.phase.path.lower = [ID_bounds,HillEquil];
+    bounds.phase.path.upper = [ID_bounds,HillEquil];
+end
 
 % Eventgroup
 % Impose mild periodicity
@@ -875,63 +949,73 @@ pera_lower = -1 * ones(1, auxdata.NMuscles);
 pera_upper = 1 * ones(1, auxdata.NMuscles);
 perFtilde_lower = -1*ones(1,auxdata.NMuscles);
 perFtilde_upper = 1*ones(1,auxdata.NMuscles);
-bounds.eventgroup.lower = [pera_lower perFtilde_lower]; 
-bounds.eventgroup.upper = [pera_upper perFtilde_upper];
+if strcmp(study{2},'Topology')
+    bounds.eventgroup.lower = [pera_lower perFtilde_lower -0.1*ones(1, auxdata.numActiveDOFs)];
+    bounds.eventgroup.upper = [pera_upper perFtilde_upper 0.1*zeros(1, auxdata.numActiveDOFs)];
+else
+    bounds.eventgroup.lower = [pera_lower perFtilde_lower];
+    bounds.eventgroup.upper = [pera_upper perFtilde_upper];
+end
 
 % Initial guesses
 
 % Time guess
-N = length(DatStore.time);
-guess.phase.time = DatStore.time;
-
-% Control guess 
-if strcmp(study{2},'Topology') && auxdata.hasActiveDevice && ~strcmp(Misc.subcase, 'ActParam') && ~strcmp(Misc.subcase, 'Exp') && ~strcmp(Misc.subcase, 'FitOpt')
-    control_guess = [DatStore.SO_MAct DatStore.SO_RAct 0.01*ones(N,auxdata.NMuscles) DatStore.SO_ExoAct];
+if strcmp(study{2}, 'Topology')
+    % Load unassisted solution to use as initial guess below.
+    unassisted = load(Misc.mrs_path);
+    solution = unassisted.OptInfo.result.solution;
+    guess.phase.time = unassisted.Time;
+    N = size(unassisted.Time, 1);
 else
-    control_guess = [DatStore.SoAct DatStore.SoRAct 0.01*ones(N,auxdata.NMuscles)];
+    guess.phase.time = DatStore.time;
+end
+
+
+% Control guess
+dF_guess = zeros(N,auxdata.NMuscles);
+if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'ActParam')
+    % Use controls from unassisted solution in guess.
+    if strcmp(actdyn, 'implicit')
+        uguess = (1/100)*unassisted.vA;
+    elseif strcmp(actdyn, 'explicit')
+        uguess = unassisted.MExcitation;
+    end
+    dF_guess = solution.phase.control(:,auxdata.NMuscles+auxdata.Ndof+1:auxdata.NMuscles+auxdata.Ndof+auxdata.NMuscles);
+    control_guess = [uguess unassisted.RActivation dF_guess 0.1*ones(N,auxdata.numActiveDOFs)];
+else
+    control_guess = [uguess zeros(N,auxdata.Ndof) dF_guess];
+
 end
 guess.phase.control = control_guess;
 
 % State guess
-guess.phase.state =  [DatStore.SoAct 0.2*ones(N,auxdata.NMuscles)];
+if strcmp(study{2}, 'Topology') 
+    a_guess = unassisted.MActivation;
+    F_guess = unassisted.TForcetilde;
+else
+    a_guess = 0.1*ones(N,auxdata.NMuscles);
+    F_guess = 0.1*ones(N,auxdata.NMuscles); 
+end
+guess.phase.state =  [a_guess F_guess];
 
 % Integral guess
-guess.phase.integral = 0;
+if strcmp(study{2}, 'Topology') 
+    guess.phase.integral = solution.phase.integral;
+else 
+    guess.phase.integral = 0;
+end
 
 % Parameter guess
-if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'FitOpt') && ~strcmp(Misc.subcase, 'ActParam')
-    guess.parameter = DatStore.SO_parameter;
+if strcmp(study{2},'Topology') && ~strcmp(Misc.subcase, 'ActParam')
+    guess.parameter = (bounds.parameter.upper - bounds.parameter.lower) / 2;
 elseif strcmp(Misc.subcase, 'ActParam')
-    guess.parameter = auxdata.paramsGuess;
+    paramsNeg = -0.001;
+    paramsPos = 0.001;
+    paramsGuessPerturb = paramsNeg + (paramsNeg-paramsPos)*rand(size(auxdata.paramsGuess));
+    guess.parameter = paramsGuessPerturb;
 end
 
-% Empty exosuit force and torque data structures
 DatStore.T_exo = zeros(length(DatStore.time),auxdata.Ndof);
-
-if strcmp(study{2},'Topology') && strcmp(Misc.subcase, 'FitOpt')
-    exoTime = Misc.exoTime;
-    exoApproximatedMoment = Misc.exoApproximatedMoment;
-    
-    for i = 1:length(Misc.activeDOFs)
-        dofInfo = split(Misc.activeDOFs{i},'/');
-        for dof = 1:auxdata.Ndof
-            if contains(DatStore.DOFNames{dof}, dofInfo{1})
-                switch dofInfo{1}
-                    case 'hip'
-                        signMoment = sign(auxdata.paramsUpper(auxdata.active.hip));
-                    case 'knee'
-                        signMoment = auxdata.kneeAngleSign*sign(auxdata.paramsUpper(auxdata.active.knee));
-                    case 'ankle'
-                        signMoment = sign(auxdata.paramsUpper(auxdata.active.ankle));
-                end
-                
-                DatStore.T_exo(:,dof) = signMoment*interp1(linspace(0,100,length(exoTime)), ...
-                    exoApproximatedMoment, ...
-                    linspace(0,100,length(DatStore.time)));
-            end
-        end
-    end
-end
 
 % Spline structures
 for dof = 1:auxdata.Ndof
@@ -961,8 +1045,8 @@ setup.derivatives.derivativelevel = 'first';
 setup.derivatives.dependencies = 'sparse';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
-setup.mesh.tolerance = 1e-4;
-setup.mesh.maxiterations = 20;
+setup.mesh.tolerance = 1e-3;
+setup.mesh.maxiterations = 0;
 setup.mesh.colpointsmin = 5;
 setup.mesh.colpointsmax = 10;
 setup.method = 'RPM-integration';
@@ -1043,12 +1127,19 @@ else
     error('Platform unknown.')
 end
 
-setup.functions.continuous = str2func(['Wrap4continous_Ftilde_vA' tag]);
-setup.adigatorgrd.continuous = str2func(['continous_Ftilde_vA' tag 'GrdWrap']);
+if strcmp(actdyn, 'implicit')
+    wrap_continuous = 'Wrap4continous_Ftilde_vA';
+    continuous = 'continous_Ftilde_vA';
+elseif strcmp(actdyn, 'explicit')
+    wrap_continuous = 'Wrap4continous_Ftilde';
+    continuous = 'continous_Ftilde';
+end
+
+setup.functions.continuous = str2func([wrap_continuous tag]);
+setup.adigatorgrd.continuous = str2func([continuous tag 'GrdWrap']);
 setup.adigatorgrd.endpoint   = str2func(['endpoint_Ftilde' tag 'ADiGatorGrd']);
 setup.adigatorhes.continuous = str2func(['continous_Ftilde_vA' tag 'HesWrap']);
-setup.adigatorhes.endpoint   = str2func(['endpoint_Ftilde' tag 'ADiGatorHes']);
-
+setup.adigatorhes.endpoint   = str2func([continuous tag 'ADiGatorHes']);
 
 %% ---------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
@@ -1056,7 +1147,15 @@ setup.adigatorhes.endpoint   = str2func(['endpoint_Ftilde' tag 'ADiGatorHes']);
 % ----------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
 
+setup.auxdata.regularizationWeight = 1e-4;
 output = gpops2(setup);
+
+% setup.auxdata.regularizationWeight = 1e-2;
+% setup.guess.phase.time = output.result.solution.phase.time;
+% setup.guess.phase.state = output.result.solution.phase.state;
+% setup.guess.phase.control = output.result.solution.phase.control;
+% setup.guess.phase.integral = output.result.solution.phase.integral;
+% output = gpops2(setup);
 
 MuscleNames = DatStore.MuscleNames;
 res = output.result.solution.phase(1);
@@ -1064,9 +1163,14 @@ Time = res.time;
 MActivation = res.state(:,1:auxdata.NMuscles);
 TForcetilde = res.state(:,auxdata.NMuscles+1:auxdata.NMuscles*2);
 TForce = TForcetilde.*(ones(size(Time))*DatStore.Fiso);
-vA=100*res.control(:,1:auxdata.NMuscles);
 dTForcetilde = 10*res.control(:,auxdata.NMuscles+auxdata.Ndof+1:auxdata.NMuscles+auxdata.Ndof+auxdata.NMuscles); 
-MExcitation = computeExcitationRaasch(MActivation, vA, auxdata.tauDeact, auxdata.tauAct);
+if strcmp(actdyn, 'implicit')
+    vA = 100*res.control(:,1:auxdata.NMuscles);
+    MExcitation = computeExcitationRaasch(MActivation, vA, auxdata.tauDeact, auxdata.tauAct);
+elseif strcmp(actdyn, 'explicit')
+    MExcitation = res.control(:,1:auxdata.NMuscles);
+end
+
 RActivation = res.control(:,auxdata.NMuscles+1:auxdata.NMuscles+auxdata.Ndof);
 OptInfo = output;
 
@@ -1076,15 +1180,11 @@ mat.DatStore = DatStore;
 mat.OptInfo = OptInfo;
 mat.MuscleNames = MuscleNames;
 
-MetabolicRate.whole_body = calcWholeBodyMetabolicRate(model, mat);
-muscle_energy_rates = calcIndividualMetabolicRate(model, mat);
-if isnan(muscle_energy_rates)
-    warning(['ERROR: NaN values returned for muscle metabolic rates, ' ...
-             'setting to zeros'])
-    muscle_energy_rates = zeros(1,length(MuscleNames));
-end
-MetabolicRate.individual_muscles = muscle_energy_rates(end,:);
-DatStore.MetabolicRate = MetabolicRate;
+[UmbergerKoelewijn2018, MinettiAlexander1997] = ...
+        calcWholeBodyMetabolicRate(model, mat);
+MetabolicInfo.UmbergerKoelewijn2018 = UmbergerKoelewijn2018;
+MetabolicInfo.MinettiAlexander1997 = MinettiAlexander1997;
+DatStore.MetabolicInfo = MetabolicInfo;
 
 % Tendon force from lMtilde
 % Interpolation lMT
@@ -1102,23 +1202,9 @@ if strcmp(study{2},'Topology')
     if strcmp(Misc.subcase, 'Act')
         [DatStore.ExoTorques_Act, DatStore.MomentArms_Act] = ...
             calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo, DatStore);
-    elseif strcmp(Misc.subcase, 'Pass')
-        [DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, DatStore.passiveForce, ...
-            DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
-            calcExoTorques_Ftilde_vAExoTopology_Pass(OptInfo, DatStore);
-    elseif strcmp(Misc.subcase, 'ActPass')
-        [DatStore.ExoTorques_Act, DatStore.MomentArms_Act, DatStore.ExoTorques_Pass, DatStore.MomentArms_Pass, ...
-            DatStore.passiveForce, DatStore.pathLength, DatStore.jointAngles, DatStore.slackLength] = ...
-            calcExoTorques_Ftilde_vAExoTopology_ActPass(OptInfo, DatStore);
     elseif strcmp(Misc.subcase, 'ActParam')
         [DatStore.ExoTorques_Act] = ...
             calcExoTorques_Ftilde_vAExoTopology_ActParam(OptInfo, DatStore);
-    elseif strcmp(Misc.subcase, 'Exp')
-        [DatStore.ExoTorques_Act] = ...
-            calcExoTorques_Ftilde_vAExoTopology_Exp(OptInfo, DatStore);
-    elseif strcmp(Misc.subcase, 'FitOpt')
-        [DatStore.ExoTorques_Act] = ...
-            calcExoTorques_Ftilde_vAExoTopology_FitOpt(OptInfo, DatStore);
     end
 end
 

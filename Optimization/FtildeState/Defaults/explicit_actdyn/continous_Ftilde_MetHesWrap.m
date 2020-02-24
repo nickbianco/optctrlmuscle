@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vA_MinAlexHesWrap(input)
+function phaseout = continous_Ftilde_MetHesWrap(input)
 
 persistent splinestruct
 
@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = continous_Ftilde_vA_MinAlexADiGatorHes(input);
+phaseout = continous_Ftilde_MetADiGatorHes(input);

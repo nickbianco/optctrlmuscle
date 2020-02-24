@@ -2,11 +2,11 @@ function Edot = calcMinettiAlexanderProbe(v,vmax,Fo,a)
 % INPUTS:
 %        v: shortening speed [m/s]
 %     vmax: max shortening speed [m/s]
-%       Fo: max isometric force
-%        a: activation
+%       Fo: max isometric force [N]
+%        a: activation 
 
 % OUTPUTS:
-%     Edot: metabolic rate
+%     Edot: metabolic rate [W]
 
 % Minetti & Alexander (1997) model parameters
 c1 = 0.054;

@@ -30,7 +30,8 @@ for m = 1:length(musclesToCalibrate)
             case 'pennation_angle'
                 params(11,muscIdx) = paramVal;
             case 'muscle_strain'
-                error('Muscle strain calibration not currently supported.');
+                error('cannot optimize muscle strain');
+%                 params(7,muscIdx) = paramVal;
         end
     end
 end
@@ -77,15 +78,16 @@ for p = 1:input.auxdata.numPhases
     % OBJECTIVE FUNCTION
     costMuscles = fieldnames(terms);
     EMGdiff = zeros(numColPoints, length(costMuscles));
-    emgScaleCount = 0;
+%     emgScaleCount = 0;
     for m = 1:length(costMuscles)
         if isfield(terms.(costMuscles{m}), 'costs')
             muscIdx = find(contains(MuscleNames, costMuscles{m}));
             
             if isfield(paramIndices.(costMuscles{m}), 'emgScale')
-                idx = paramIndices.(costMuscles{m}).emgScale;
-                emgScale = parameters(1,idx);
-                emgScaleCount = emgScaleCount + 1;
+%                 idx = paramIndices.(costMuscles{m}).emgScale;
+%                 emgScale = parameters(1,idx);
+%                 emgScaleCount = emgScaleCount + 1;
+                emgScale = 0;
             else
                 emgScale = 1;
             end
@@ -104,16 +106,12 @@ for p = 1:input.auxdata.numPhases
         end
     end
     
-    % Penalty on parameters deviating from nominal
-    param_dev = 4*(parameters(1,1:(end-emgScaleCount))-1).^2;
-    
     % Outputs
     phaseout(p).path = [Tdiff muscleData.err];
     % Contraction dynamics is implicit
     phaseout(p).dynamics = [dadt dFtilde];
     w1 = 1000;
-    wAct = 0.1;
-    wParam = 0.1;
+    wAct = 0.01;
     phaseout(p).integrand = w1.*sum(aT.^2,2) + sum(EMGdiff.^2,2) + wAct*sum(a.^2,2); % + wParam*sum(param_dev,2);
     
 end

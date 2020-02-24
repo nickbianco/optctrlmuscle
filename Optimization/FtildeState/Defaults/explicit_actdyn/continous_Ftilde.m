@@ -46,7 +46,7 @@ phaseout.dynamics = [dadt dFtilde];
 
 % OBJECTIVE FUNCTION
 w1 = 1000;
-phaseout.integrand = sum(e.^2,2)+ w1.*sum(aT.^2,2);
+phaseout.integrand = sum(e.^2,2) + w1.*sum(aT.^2,2);
 
 
 

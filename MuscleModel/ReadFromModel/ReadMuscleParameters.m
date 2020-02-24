@@ -41,7 +41,7 @@ for i = 1:nom
    mass = PCSA*rho*params(2,i); % Muscle mass [kg]
    metabolicParams(4,i) = mass;
    % aerobic vs. anaerobic scaling factor
-   metabolicParams(5,i) = 1.0;
+   metabolicParams(5,i) = 1.5;
 end
 
 % create additional variables with the same information

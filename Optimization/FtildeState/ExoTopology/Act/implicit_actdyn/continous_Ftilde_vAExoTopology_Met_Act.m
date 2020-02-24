@@ -7,8 +7,9 @@ Ndof            = auxdata.Ndof;
 tauAct          = auxdata.tauAct;
 tauDeact        = auxdata.tauDeact;
 params          = auxdata.params;
-metabolicParams = auxdata.metabolicParams;
+% metabolicParams = auxdata.metabolicParams;
 splinestruct    = auxdata.splinestruct;
+% speed           = input.auxdata.speed;
 numColPoints    = size(input.phase.state,1);
 T_exp           = splinestruct.ID;
 
@@ -21,9 +22,6 @@ aD      = input.phase.control(:,end-(auxdata.numActiveDOFs-1):end);
 % Get states
 a      = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
-if auxdata.shift_exo_peaks
-    aDshift = input.phase.state(:,end);
-end
 
 % Convert parameters to the correct range
 paramsLower = auxdata.paramsLower;
@@ -102,36 +100,41 @@ phaseout.path = [Tdiff muscleData.err act1 act2];
 % Contraction dynamics is implicit
 phaseout.dynamics = [vA dFtilde];
 
-if auxdata.shift_exo_peaks
-    % Device activation dynamics is explicit
-    tauActExo = parameter(1,end);
-    dadt = ActivationDynamics(aD, aDshift, tauActExo, 0.01, auxdata.b);
-    phaseout.dynamics = [phaseout.dynamics dadt];
-end
-
 % OBJECTIVE FUNCTION
-Edot = zeros(numColPoints, NMuscles);
+% Calculate metabolic rate from Minetti & Alexander (1997) model
+vmax = params(5,:);  
+Fo = params(1,:);   
+Edot = zeros(numColPoints,NMuscles);
 for m = 1:NMuscles
-    Lce = muscleData.lMtilde(:,m)*params(2,m);
-    Vce = muscleData.vMtilde(:,m)*params(5,m);
-%     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
-    paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
-                   metabolicParams(3,m), metabolicParams(4,m), ...
-                   metabolicParams(5,m)];
-    Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
-                                     Vce, ...
-                                     max(0, muscleData.Fce(:,m)), ...
-                                     max(0, muscleData.FMltilde(:,m)), ...
-                                     min(max(0, a(:,m)), 1), ... % TODO: keep using activation in place of excitation?
-                                     min(max(0, a(:,m)), 1), ...
-                                     paramStruct);
+    v = vmax(1,m)*muscleData.vMtilde(:,m);
+    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
 end
 
-w_aT = 1000;
-w_Edot = 1/(auxdata.model_mass*9.81*1.25);
+% Calculate metabolic rate from Umberger(2010) model
+% Edot = zeros(numColPoints, NMuscles);
+% for m = 1:NMuscles
+%     Lce = muscleData.lMtilde(:,m)*params(2,m);
+%     Vce = muscleData.vMtilde(:,m)*params(5,m);
+%     paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
+%                    metabolicParams(3,m), metabolicParams(4,m), ...
+%                    metabolicParams(5,m)];
+%     Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
+%                                      Vce, ...
+%                                      max(0, muscleData.Fce(:,m)), ...
+%                                      max(0, muscleData.FMltilde(:,m)), ...
+%                                      min(max(0, e(:,m)), 1), ... 
+%                                      min(max(0, a(:,m)), 1), ...
+%                                      paramStruct);
+% end
+
 % Overwriting first time point of metabolics to avoid effects that initial spikes
 % in fiber powers may have on the cost.
-Edot(1,:) = Edot(2,:);
-phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2) + sum((vA/100).^2,2);
+% Edot(1,:) = Edot(2,:);
+
+w_Edot = 1/input.auxdata.model_mass;
+w_Res = 1000;
+w_Reg = 1e-6;
+phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res.*sum(aT.^2,2) + ...
+                     w_Reg.*(sum(dFtilde.^2,2) + sum(e.^2,2));
 
 

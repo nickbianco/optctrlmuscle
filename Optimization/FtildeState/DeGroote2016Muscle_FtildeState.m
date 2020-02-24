@@ -98,6 +98,7 @@ muscleData.FM = FM;
 muscleData.lTtilde = lTtilde;
 muscleData.lT = lT;
 muscleData.fse = fse;
+muscleData.dfse = dfse;
 muscleData.FT = FT;
 muscleData.FMltilde = FMltilde;
 muscleData.lMtilde = lMtilde;

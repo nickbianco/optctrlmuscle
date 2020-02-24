@@ -7,7 +7,7 @@ Ndof            = input.auxdata.Ndof;
 tauAct          = input.auxdata.tauAct;
 tauDeact        = input.auxdata.tauDeact;
 params          = input.auxdata.params;
-metabolicParams = input.auxdata.metabolicParams;
+% metabolicParams = input.auxdata.metabolicParams;
 splinestruct    = input.auxdata.splinestruct;
 numColPoints    = size(input.phase.state,1);
 
@@ -78,7 +78,68 @@ elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHeKe')
     aD_knee = getTorqueControlFromParameters(peakTorque*kneeTorqueScale, ...
         peakTime, riseTime, fallTime, numColPoints);
     
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHfKfAp_multControls')
+    aD_hip = aD;
     
+    peakTorque2 = parameter(1, torqueParams.peak_torque_2.idx);
+    peakTime2 = parameter(1, torqueParams.peak_time_2.idx);
+    riseTime2 = parameter(1, torqueParams.rise_time_2.idx);
+    fallTime2 = parameter(1, torqueParams.fall_time_2.idx);
+    
+    aD_knee = getTorqueControlFromParameters(peakTorque2, peakTime2, riseTime2, ... 
+            fallTime2, numColPoints);
+    
+    peakTorque3 = parameter(1, torqueParams.peak_torque_3.idx);
+    peakTime3 = parameter(1, torqueParams.peak_time_3.idx);
+    riseTime3 = parameter(1, torqueParams.rise_time_3.idx);
+    fallTime3 = parameter(1, torqueParams.fall_time_3.idx);
+    
+    aD_ankle = getTorqueControlFromParameters(peakTorque3, peakTime3, riseTime3, ... 
+            fallTime3, numColPoints);
+        
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHfKf_multControls')
+    aD_hip = aD;
+    
+    peakTorque2 = parameter(1, torqueParams.peak_torque_2.idx);
+    peakTime2 = parameter(1, torqueParams.peak_time_2.idx);
+    riseTime2 = parameter(1, torqueParams.rise_time_2.idx);
+    fallTime2 = parameter(1, torqueParams.fall_time_2.idx);
+    
+    aD_knee = getTorqueControlFromParameters(peakTorque2, peakTime2, riseTime2, ... 
+            fallTime2, numColPoints);
+    
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHfAp_multControls')
+    aD_hip = aD;
+    
+    peakTorque2 = parameter(1, torqueParams.peak_torque_2.idx);
+    peakTime2 = parameter(1, torqueParams.peak_time_2.idx);
+    riseTime2 = parameter(1, torqueParams.rise_time_2.idx);
+    fallTime2 = parameter(1, torqueParams.fall_time_2.idx);
+    
+    aD_ankle = getTorqueControlFromParameters(peakTorque2, peakTime2, riseTime2, ... 
+            fallTime2, numColPoints);
+        
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actKfAp_multControls')
+    aD_knee = aD;
+    
+    peakTorque2 = parameter(1, torqueParams.peak_torque_2.idx);
+    peakTime2 = parameter(1, torqueParams.peak_time_2.idx);
+    riseTime2 = parameter(1, torqueParams.rise_time_2.idx);
+    fallTime2 = parameter(1, torqueParams.fall_time_2.idx);
+    
+    aD_ankle = getTorqueControlFromParameters(peakTorque2, peakTime2, riseTime2, ... 
+            fallTime2, numColPoints);
+        
+elseif strcmp(auxdata.mod_name,'fitreopt_zhang2017_actHeKe_multControls')
+    aD_hip = aD;
+    
+    peakTorque2 = parameter(1, torqueParams.peak_torque_2.idx);
+    peakTime2 = parameter(1, torqueParams.peak_time_2.idx);
+    riseTime2 = parameter(1, torqueParams.rise_time_2.idx);
+    fallTime2 = parameter(1, torqueParams.fall_time_2.idx);
+    
+    aD_knee = getTorqueControlFromParameters(peakTorque2, peakTime2, riseTime2, ... 
+            fallTime2, numColPoints);
 end
 
 % PATH CONSTRAINTS
@@ -124,27 +185,40 @@ phaseout.path = [Tdiff muscleData.err act1 act2];
 phaseout.dynamics = [vA dFtilde];
 
 % OBJECTIVE FUNCTION
-Edot = zeros(numColPoints, NMuscles);
+% Calculate metabolic rate from Minetti & Alexander (1997) model
+vmax = params(5,:);  
+Fo = params(1,:);   
+Edot = zeros(numColPoints,NMuscles);
 for m = 1:NMuscles
-    Lce = muscleData.lMtilde(:,m)*params(2,m);
-    Vce = muscleData.vMtilde(:,m)*params(5,m);
-%     u = computeExcitationRaasch(a(:,m), vA(:,m), tauDeact(m), tauAct(m));
-    paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
-                   metabolicParams(3,m), metabolicParams(4,m), ...
-                   metabolicParams(5,m)];
-    Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
-                                     Vce, ...
-                                     max(0, muscleData.Fce(:,m)), ...
-                                     max(0, muscleData.FMltilde(:,m)), ...
-                                     min(max(0, a(:,m)), 1), ...
-                                     min(max(0, a(:,m)), 1), ...
-                                     paramStruct);
+    v = vmax(1,m)*muscleData.vMtilde(:,m);
+    Edot(:,m) = calcMinettiAlexanderProbe(v,vmax(1,m),Fo(1,m),a(:,m));
 end
-w_aT = 1000;
-w_Edot = 1/(input.auxdata.model_mass*9.81*1.25);
+
+% Calculate metabolic rate from Umberger(2010) model
+% Edot = zeros(numColPoints, NMuscles);
+% for m = 1:NMuscles
+%     Lce = muscleData.lMtilde(:,m)*params(2,m);
+%     Vce = muscleData.vMtilde(:,m)*params(5,m);
+%     paramStruct = [metabolicParams(1,m), metabolicParams(2,m), ...
+%                    metabolicParams(3,m), metabolicParams(4,m), ...
+%                    metabolicParams(5,m)];
+%     Edot(:,m) = calcUmbergerCost2010(max(0, Lce), ...
+%                                      Vce, ...
+%                                      max(0, muscleData.Fce(:,m)), ...
+%                                      max(0, muscleData.FMltilde(:,m)), ...
+%                                      min(max(0, e(:,m)), 1), ... 
+%                                      min(max(0, a(:,m)), 1), ...
+%                                      paramStruct);
+% end
+
 % Overwriting first time point of metabolics to avoid effects that initial spikes
 % in fiber powers may have on the cost.
-Edot(1,:) = Edot(2,:);
-phaseout.integrand = w_Edot*sum(Edot, 2) + w_aT.*sum(aT.^2,2) + sum((vA/100).^2,2);
+% Edot(1,:) = Edot(2,:);
+
+w_Edot = 1/input.auxdata.model_mass;
+w_Res = 1000;
+w_Reg = 1e-6;
+phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res.*sum(aT.^2,2) + ...
+                     w_Reg.*(sum(dFtilde.^2,2) + sum(e.^2,2));
 
 

@@ -17,7 +17,11 @@ state = OptInfo.result.solution.phase.state;
 
 % Get controls
 if strcmp(DatStore.formulation,'Ftilde')
-    vA = 100*control(:,1:numMuscles);
+    if strcmp(auxdata.actdyn, 'implicit')
+        vA = 100*control(:,1:numMuscles);
+    elseif strcmp(auxdata.actdyn, 'explicit')
+        e = control(:,1:numMuscles);
+    end
     aT = control(:,numMuscles+1:numMuscles+numDOFs);
     dFtilde = 10*control(:,numMuscles+numDOFs+1:numMuscles+numDOFs+numMuscles);
    
@@ -30,7 +34,9 @@ end
 % Get states
 if strcmp(DatStore.formulation,'Ftilde')
     a = state(:,1:numMuscles);
-    e = computeExcitationRaasch(a, vA, auxdata.tauDeact, auxdata.tauAct);
+    if strcmp(auxdata.actdyn, 'implicit')
+        e = computeExcitationRaasch(a, vA, auxdata.tauDeact, auxdata.tauAct);
+    end
 
     Ftilde = state(:,numMuscles+1:numMuscles+numMuscles);
     
