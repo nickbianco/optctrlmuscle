@@ -71,12 +71,6 @@ end
 if ~strcmp(Misc.costfun,'Default')
     tag = [tag '_' Misc.costfun];
 end
-% Subcase
-if ~isfield(Misc,'subcase') || isempty(Misc.subcase)
-   Misc.subcase = ''; 
-else
-   tag = [tag '_' Misc.subcase];
-end
 
 % ----------------------------------------------------------------------- %
 % Check for optional input arguments, see manual for details------------- %
@@ -157,13 +151,9 @@ if ~isfield(Misc, 'pennationAngleModifiers') || isempty(Misc.pennationAngleModif
     Misc.pennationAngleModifiers = [];
 end
 if strcmp(study{2},'Topology')
-    % ExoTopology: DOF's assisted by passive device
-    if ~isfield(Misc, 'passiveDOFs') || isempty(Misc.passiveDOFs)
-       Misc.passiveDOFs = []; 
-    end
-    % ExoTopology: DOF's assisted by active device
-    if ~isfield(Misc, 'activeDOFs') || isempty(Misc.activeDOFs)
-       Misc.activeDOFs = []; 
+    % ExoTopology: DOF's assisted by exoskeleton device
+    if ~isfield(Misc, 'deviceDOFs') || isempty(Misc.deviceDOFs)
+       Misc.deviceDOFs = []; 
     end
     % ExoTopology: fix moment arms to a constant value
     if ~isfield(Misc, 'fixMomentArms') || isempty(Misc.fixMomentArms)
@@ -192,7 +182,7 @@ end
 % ----------------------------------------------------------------------- %
 % Check that options are being specified correctly -----------------------%
 if ~strcmp(study{2},'Topology')
-    exoFlags = {'passiveDOFs','activeDOFs','fixMomentArms', 'fixParams', ...
+    exoFlags = {'deviceDOFs','fixMomentArms', 'fixParams', ...
         'mult_controls', 'same_torque_gain', 'shift_exo_peaks', 'paramGuess'};
     
     for i = 1:length(exoFlags) 
@@ -325,7 +315,7 @@ model = org.opensim.modeling.Model(model_path);
 state = model.initSystem();
 model_mass = model.getTotalMass(state);
 auxdata.model_mass = model_mass;
-auxdata.numActiveDOFs = 1;
+auxdata.numDeviceDOFs = 1;
 config = ReadYaml('C:\Users\Nick\Projects\ExoTopology\exotopology\config.yaml');
 norm_hip_max_torque = config.norm_hip_max_torque; % N-m/kg
 norm_knee_max_torque = config.norm_knee_max_torque; % N-m/kg
@@ -339,131 +329,130 @@ if strcmp(study{2}, 'Topology')
     paramsUpper = [];
     paramsGuess = [];
     isBidirectional = [];
-    % Active device indicies
-    if ~isempty(Misc.activeDOFs)
-        auxdata.Tmax_act_hip = norm_hip_max_torque * model_mass;
-        auxdata.Tmax_act_knee = norm_knee_max_torque * model_mass;
-        auxdata.Tmax_act_ankle = norm_ankle_max_torque * model_mass;
-        auxdata.active.hip = 0;
-        auxdata.active.knee = 0;
-        auxdata.active.ankle = 0;
-        for i = 1:length(Misc.activeDOFs)
-            dofInfo = split(Misc.activeDOFs{i},'/');
-            switch dofInfo{1}
-                case 'hip'
-                    numExoParams = numExoParams + 1;
-                    auxdata.active.hip = numExoParams;
-                    paramsLower(numExoParams) = -1.0; %#ok<*AGROW>
-                    paramsUpper(numExoParams) = 1.0;
-                    isBidirectional(numExoParams) = 0;
-                    if ~isempty(Misc.fixMomentArms)
-                        paramsLower(numExoParams) = Misc.fixMomentArms;
-                        paramsUpper(numExoParams) = Misc.fixMomentArms;
-                        paramsGuess(numExoParams) = Misc.fixMomentArms;
+    auxdata.Tmax_act_hip = norm_hip_max_torque * model_mass;
+    auxdata.Tmax_act_knee = norm_knee_max_torque * model_mass;
+    auxdata.Tmax_act_ankle = norm_ankle_max_torque * model_mass;
+    auxdata.device.hip = 0;
+    auxdata.device.knee = 0;
+    auxdata.device.ankle = 0;
+    for i = 1:length(Misc.deviceDOFs)
+        dofInfo = split(Misc.deviceDOFs{i},'/');
+        switch dofInfo{1}
+            case 'hip'
+                numExoParams = numExoParams + 1;
+                auxdata.device.hip = numExoParams;
+                paramsLower(numExoParams) = -1.0; %#ok<*AGROW>
+                paramsUpper(numExoParams) = 1.0;
+                isBidirectional(numExoParams) = 0;
+                if ~isempty(Misc.fixMomentArms)
+                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                    paramsGuess(numExoParams) = Misc.fixMomentArms;
+                end
+                if length(dofInfo) > 1
+                    switch dofInfo{2}
+                        case 'flex'
+                            if ~isempty(Misc.fixMomentArms)
+                                paramsLower(numExoParams) = Misc.fixMomentArms;
+                                paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                paramsGuess(numExoParams) = Misc.fixMomentArms;
+                            else
+                                paramsLower(numExoParams) = minMomentArm;
+                                paramsUpper(numExoParams) = maxMomentArm;
+                            end
+                        case 'ext'
+                            if ~isempty(Misc.fixMomentArms)
+                                paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                paramsGuess(numExoParams) = -Misc.fixMomentArms;
+                            else
+                                paramsLower(numExoParams) = -maxMomentArm;
+                                paramsUpper(numExoParams) = -minMomentArm;
+                            end
                     end
-                    if length(dofInfo) > 1
-                        switch dofInfo{2}
-                            case 'flex'
-                                if ~isempty(Misc.fixMomentArms)
-                                    paramsLower(numExoParams) = Misc.fixMomentArms;
-                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
-                                    paramsGuess(numExoParams) = Misc.fixMomentArms;
-                                else
-                                    paramsLower(numExoParams) = minMomentArm;
-                                    paramsUpper(numExoParams) = maxMomentArm;
-                                end
-                            case 'ext'
-                                if ~isempty(Misc.fixMomentArms)
-                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
-                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
-                                    paramsGuess(numExoParams) = -Misc.fixMomentArms;
-                                else
-                                    paramsLower(numExoParams) = -maxMomentArm;
-                                    paramsUpper(numExoParams) = -minMomentArm;
-                                end
-                        end
-                    else
-                        assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
-                        isBidirectional(numExoParams) = 1;
+                else
+                    assert(Misc.mult_controls, ...
+                       'Cannot use bidirectional actuators in coupled control.');
+                    isBidirectional(numExoParams) = 1;
+                end
+            case 'knee'
+                numExoParams = numExoParams + 1;
+                auxdata.device.knee = numExoParams;
+                paramsLower(numExoParams) = -1.0;
+                paramsUpper(numExoParams) = 1.0;
+                isBidirectional(numExoParams) = 0;
+                if ~isempty(Misc.fixMomentArms)
+                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                    paramsGuess(numExoParams) = Misc.fixMomentArms;
+                end
+                if length(dofInfo) > 1
+                    switch dofInfo{2}
+                        case 'ext'
+                            if ~isempty(Misc.fixMomentArms)
+                                paramsLower(numExoParams) = Misc.fixMomentArms;
+                                paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                paramsGuess(numExoParams) = Misc.fixMomentArms;
+                            else
+                                paramsLower(numExoParams) = minMomentArm;
+                                paramsUpper(numExoParams) = maxMomentArm;
+                            end
+                        case 'flex'
+                            if ~isempty(Misc.fixMomentArms)
+                                paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                paramsGuess(numExoParams) = -Misc.fixMomentArms;
+                            else
+                                paramsLower(numExoParams) = -maxMomentArm;
+                                paramsUpper(numExoParams) = -minMomentArm;
+                            end
                     end
-                case 'knee'
-                    numExoParams = numExoParams + 1;
-                    auxdata.active.knee = numExoParams;
-                    paramsLower(numExoParams) = -1.0;
-                    paramsUpper(numExoParams) = 1.0;
-                    isBidirectional(numExoParams) = 0;
-                    if ~isempty(Misc.fixMomentArms)
-                        paramsLower(numExoParams) = Misc.fixMomentArms;
-                        paramsUpper(numExoParams) = Misc.fixMomentArms;
-                        paramsGuess(numExoParams) = Misc.fixMomentArms;
+                else
+                    assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                    isBidirectional(numExoParams) = 1;
+                end
+            case 'ankle'
+                numExoParams = numExoParams + 1;
+                auxdata.device.ankle = numExoParams;
+                paramsLower(numExoParams) = -1.0;
+                paramsUpper(numExoParams) = 1.0;
+                isBidirectional(numExoParams) = 0;
+                if ~isempty(Misc.fixMomentArms)
+                    paramsLower(numExoParams) = Misc.fixMomentArms;
+                    paramsUpper(numExoParams) = Misc.fixMomentArms;
+                    paramsGuess(numExoParams) = Misc.fixMomentArms;
+                end
+                if length(dofInfo) > 1
+                    switch dofInfo{2}
+                        case 'dorsi'
+                            if ~isempty(Misc.fixMomentArms)
+                                paramsLower(numExoParams) = Misc.fixMomentArms;
+                                paramsUpper(numExoParams) = Misc.fixMomentArms;
+                                paramsGuess(numExoParams) = Misc.fixMomentArms;
+                            else
+                                paramsLower(numExoParams) = minMomentArm;
+                                paramsUpper(numExoParams) = maxMomentArm;
+                            end
+                        case 'plantar'
+                            if ~isempty(Misc.fixMomentArms)
+                                paramsLower(numExoParams) = -Misc.fixMomentArms;
+                                paramsUpper(numExoParams) = -Misc.fixMomentArms;
+                                paramsGuess(numExoParams) = -Misc.fixMomentArms;
+                            else
+                                paramsLower(numExoParams) = -maxMomentArm;
+                                paramsUpper(numExoParams) = -minMomentArm;
+                            end
                     end
-                    if length(dofInfo) > 1
-                        switch dofInfo{2}
-                            case 'ext'
-                                if ~isempty(Misc.fixMomentArms)
-                                    paramsLower(numExoParams) = Misc.fixMomentArms;
-                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
-                                    paramsGuess(numExoParams) = Misc.fixMomentArms;
-                                else
-                                    paramsLower(numExoParams) = minMomentArm;
-                                    paramsUpper(numExoParams) = maxMomentArm;
-                                end
-                            case 'flex'
-                                if ~isempty(Misc.fixMomentArms)
-                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
-                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
-                                    paramsGuess(numExoParams) = -Misc.fixMomentArms;
-                                else
-                                    paramsLower(numExoParams) = -maxMomentArm;
-                                    paramsUpper(numExoParams) = -minMomentArm;
-                                end
-                        end
-                    else
-                        assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
-                        isBidirectional(numExoParams) = 1;
-                    end
-                case 'ankle'
-                    numExoParams = numExoParams + 1;
-                    auxdata.active.ankle = numExoParams;
-                    paramsLower(numExoParams) = -1.0;
-                    paramsUpper(numExoParams) = 1.0;
-                    isBidirectional(numExoParams) = 0;
-                    if ~isempty(Misc.fixMomentArms)
-                        paramsLower(numExoParams) = Misc.fixMomentArms;
-                        paramsUpper(numExoParams) = Misc.fixMomentArms;
-                        paramsGuess(numExoParams) = Misc.fixMomentArms;
-                    end
-                    if length(dofInfo) > 1
-                        switch dofInfo{2}
-                            case 'dorsi'
-                                if ~isempty(Misc.fixMomentArms)
-                                    paramsLower(numExoParams) = Misc.fixMomentArms;
-                                    paramsUpper(numExoParams) = Misc.fixMomentArms;
-                                    paramsGuess(numExoParams) = Misc.fixMomentArms;
-                                else
-                                    paramsLower(numExoParams) = minMomentArm;
-                                    paramsUpper(numExoParams) = maxMomentArm;
-                                end
-                            case 'plantar'
-                                if ~isempty(Misc.fixMomentArms)
-                                    paramsLower(numExoParams) = -Misc.fixMomentArms;
-                                    paramsUpper(numExoParams) = -Misc.fixMomentArms;
-                                    paramsGuess(numExoParams) = -Misc.fixMomentArms;
-                                else
-                                    paramsLower(numExoParams) = -maxMomentArm;
-                                    paramsUpper(numExoParams) = -minMomentArm;
-                                end
-                        end
-                    else
-                        assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
-                        isBidirectional(numExoParams) = 1;
-                    end
-            end
-        end
-        if Misc.mult_controls
-            auxdata.numActiveDOFs = numExoParams;
+                else
+                    assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                    isBidirectional(numExoParams) = 1;
+                end
         end
     end
+    if Misc.mult_controls
+        auxdata.numDeviceDOFs = numExoParams;
+    end
+    
     
     % Pass parameter index info to auxdata so it can be used in static
     % optimization initial guess
@@ -471,7 +460,6 @@ if strcmp(study{2}, 'Topology')
     auxdata.paramsLower = paramsLower;
     auxdata.paramsUpper = paramsUpper;
     auxdata.isBidirectional = isBidirectional;
-    auxdata.subcase = Misc.subcase;
     
     % Pass whether or not exoskeleton torques should be shifted based on 
     % net joint moment timings
@@ -559,9 +547,9 @@ dFMin = dF_min*ones(1,auxdata.NMuscles);
 dFMax = dF_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); 
 aTmax = 1*ones(1,auxdata.Ndof);
-aDmin = zeros(1, auxdata.numActiveDOFs); 
-aDmax = ones(1, auxdata.numActiveDOFs);
-for i = 1:auxdata.numActiveDOFs
+aDmin = zeros(1, auxdata.numDeviceDOFs); 
+aDmax = ones(1, auxdata.numDeviceDOFs);
+for i = 1:auxdata.numDeviceDOFs
     if auxdata.isBidirectional(i) 
        aDmin(i) = -1; 
     end
@@ -638,8 +626,8 @@ pera_upper = 1 * ones(1, auxdata.NMuscles);
 perFtilde_lower = -1*ones(1,auxdata.NMuscles);
 perFtilde_upper = 1*ones(1,auxdata.NMuscles);
 if strcmp(study{2},'Topology')
-    bounds.eventgroup.lower = [pera_lower perFtilde_lower -0.1*ones(1, auxdata.numActiveDOFs)];
-    bounds.eventgroup.upper = [pera_upper perFtilde_upper 0.1*zeros(1, auxdata.numActiveDOFs)];
+    bounds.eventgroup.lower = [pera_lower perFtilde_lower -0.1*ones(1, auxdata.numDeviceDOFs)];
+    bounds.eventgroup.upper = [pera_upper perFtilde_upper 0.1*zeros(1, auxdata.numDeviceDOFs)];
 else
     bounds.eventgroup.lower = [pera_lower perFtilde_lower];
     bounds.eventgroup.upper = [pera_upper perFtilde_upper];
@@ -669,7 +657,7 @@ if strcmp(study{2},'Topology')
         uguess = unassisted.MExcitation;
     end
     dF_guess = solution.phase.control(:,auxdata.NMuscles+auxdata.Ndof+1:auxdata.NMuscles+auxdata.Ndof+auxdata.NMuscles);
-    control_guess = [uguess unassisted.RActivation dF_guess 0.1*ones(N,auxdata.numActiveDOFs)];
+    control_guess = [uguess unassisted.RActivation dF_guess 0.1*ones(N,auxdata.numDeviceDOFs)];
 else
     control_guess = [uguess zeros(N,auxdata.Ndof) dF_guess];
 
@@ -874,11 +862,9 @@ MuscleData = DeGroote2016Muscle_FtildeState(MActivation, TForcetilde, ...
     auxdata.Faparam);
 
 if strcmp(study{2},'Topology')
-    if strcmp(Misc.subcase, 'Act')
-        [DatStore.ExoTorques_Act, DatStore.MomentArms_Act] = ...
-            calcExoTorques_Ftilde_vAExoTopology_Act(OptInfo, DatStore);
-    end
+    [DatStore.ExoTorques, DatStore.MomentArms] = ...
+        calcExoTorques_Ftilde_vAExoTopology(OptInfo, DatStore);
 end
-
+    
 end
 

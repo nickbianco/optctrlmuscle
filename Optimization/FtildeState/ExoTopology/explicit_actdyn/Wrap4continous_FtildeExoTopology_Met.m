@@ -1,4 +1,4 @@
-function phaseout = Wrap4continous_FtildeExoTopology_Met_Act(input)
+function phaseout = Wrap4continous_FtildeExoTopology_Met(input)
 
 persistent splinestruct
 
@@ -8,4 +8,4 @@ end
 
 input.auxdata.splinestruct = splinestruct;
 
-phaseout = continous_FtildeExoTopology_Met_Act(input);
+phaseout = continous_FtildeExoTopology_Met(input);

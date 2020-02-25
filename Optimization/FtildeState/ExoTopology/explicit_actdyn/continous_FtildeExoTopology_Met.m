@@ -1,4 +1,4 @@
-function phaseout = continous_FtildeExoTopology_Met_Act(input)
+function phaseout = continous_FtildeExoTopology_Met(input)
 
 % Get input data
 auxdata         = input.auxdata;
@@ -19,7 +19,7 @@ T_exp           = splinestruct.ID;
 e       = input.phase.control(:,1:NMuscles);
 aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-eD      = input.phase.control(:,end-(auxdata.numActiveDOFs-1):end);
+eD      = input.phase.control(:,end-(auxdata.numDeviceDOFs-1):end);
 
 % Get states
 a      = input.phase.state(:,1:NMuscles);
@@ -38,26 +38,26 @@ exoMomentArms = zeros(numColPoints,3);
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
-if auxdata.active.hip
-    exoMomentArms(:,1) = parameter(:,auxdata.active.hip);
-    if auxdata.numActiveDOFs > 1
-        aD_hip = aD(:,auxdata.active.hip);
+if auxdata.device.hip
+    exoMomentArms(:,1) = parameter(:,auxdata.device.hip);
+    if auxdata.numDeviceDOFs > 1
+        aD_hip = aD(:,auxdata.device.hip);
     else
         aD_hip = aD;
     end
 end
-if auxdata.active.knee
-    exoMomentArms(:,2) = parameter(:,auxdata.active.knee);
-    if auxdata.numActiveDOFs > 1
-        aD_knee = aD(:,auxdata.active.knee);
+if auxdata.device.knee
+    exoMomentArms(:,2) = parameter(:,auxdata.device.knee);
+    if auxdata.numDeviceDOFs > 1
+        aD_knee = aD(:,auxdata.device.knee);
     else
         aD_knee = aD;
     end
 end
-if auxdata.active.ankle
-    exoMomentArms(:,3) = parameter(:,auxdata.active.ankle);
-    if auxdata.numActiveDOFs > 1
-        aD_ankle = aD(:,auxdata.active.ankle);
+if auxdata.device.ankle
+    exoMomentArms(:,3) = parameter(:,auxdata.device.ankle);
+    if auxdata.numDeviceDOFs > 1
+        aD_ankle = aD(:,auxdata.device.ankle);
     else
         aD_ankle = aD;
     end
@@ -99,11 +99,11 @@ phaseout.path = [Tdiff muscleData.err];
 % DYNAMIC CONSTRAINTS
 % Activation dynamics
 dadt = ones(numColPoints,NMuscles);
-daDdt = ones(numColPoints,auxdata.numActiveDOFs);
+daDdt = ones(numColPoints,auxdata.numDeviceDOFs);
 for m = 1:NMuscles
     dadt(:,m) = ActivationDynamics(e(:,m),a(:,m),tauAct(m),tauDeact(m),input.auxdata.b);
 end
-for i = 1:auxdata.numActiveDOFs
+for i = 1:auxdata.numDeviceDOFs
    daDdt(:,i) = ActivationDynamics(eD(:,i),aD(:,i),0.01,0.01,input.auxdata.b);
 end
 
@@ -130,14 +130,14 @@ end
 w_Edot = 1/(NMuscles*input.auxdata.model_mass);
 w_Res = 1e3/Ndof;
 % w_Control = 1/(3*NMuscles);
-% w_Reg = auxdata.regularizationWeight/(NMuscles + auxdata.numActiveDOFs + Ndof);
+% w_Reg = auxdata.regularizationWeight/(NMuscles + auxdata.numDeviceDOFs + Ndof);
 
 % dFtilde_diff = [zeros(1, NMuscles); dFtilde(2:end,:) - dFtilde(1:end-1,:)];
 % e_diff = [zeros(1, NMuscles); e(2:end,:) - e(1:end-1,:)];
 % Ftilde_diff = [zeros(1, NMuscles); Ftilde(2:end,:) - Ftilde(1:end-1,:)];
 % a_diff = [zeros(1, NMuscles); a(2:end,:) - a(1:end-1,:)];
 % aT_diff = [zeros(1, Ndof); aT(2:end,:) - aT(1:end-1,:)];
-% aD_diff = [zeros(1, auxdata.numActiveDOFs); aD(2:end,:) - aD(1:end-1,:)];
+% aD_diff = [zeros(1, auxdata.numDeviceDOFs); aD(2:end,:) - aD(1:end-1,:)];
 
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
                      sum((dFtilde/10).^2,2)/NMuscles + sum(e.^2,2)/NMuscles + ...

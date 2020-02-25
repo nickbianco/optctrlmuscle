@@ -1,4 +1,4 @@
-function output = endpoint_FtildeExoTopology_Act(input)
+function output = endpoint_FtildeExoTopology_Met(input)
 
 q = input.phase.integral;
 output.objective = q;

@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Act(input)
+function phaseout = continous_Ftilde_vAExoTopology(input)
 
 % Get input data
 NMuscles        = input.auxdata.NMuscles;
@@ -13,7 +13,7 @@ numColPoints    = size(input.phase.state,1);
 vA      = 100*input.phase.control(:,1:NMuscles);
 aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD      = input.phase.control(:,end-(input.auxdata.numActiveDOFs-1):end);
+aD      = input.phase.control(:,end-(input.auxdata.numDeviceDOFs-1):end);
 
 % Get states
 a      = input.phase.state(:,1:NMuscles);
@@ -24,26 +24,26 @@ exoMomentArms = zeros(numColPoints,3);
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
-if input.auxdata.active.hip
-    exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.active.hip);
-    if input.auxdata.numActiveDOFs > 1
-        aD_hip = aD(:,input.auxdata.active.hip);
+if input.auxdata.device.hip
+    exoMomentArms(:,1) = input.phase.parameter(:,input.auxdata.device.hip);
+    if input.auxdata.numDeviceDOFs > 1
+        aD_hip = aD(:,input.auxdata.device.hip);
     else
         aD_hip = aD;
     end
 end
-if input.auxdata.active.knee
-    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.active.knee);
-    if input.auxdata.numActiveDOFs > 1
-        aD_knee = aD(:,input.auxdata.active.knee);
+if input.auxdata.device.knee
+    exoMomentArms(:,2) = input.phase.parameter(:,input.auxdata.device.knee);
+    if input.auxdata.numDeviceDOFs > 1
+        aD_knee = aD(:,input.auxdata.device.knee);
     else
         aD_knee = aD;
     end
 end
-if input.auxdata.active.ankle
-    exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.active.ankle);
-    if input.auxdata.numActiveDOFs > 1
-        aD_ankle = aD(:,input.auxdata.active.ankle);
+if input.auxdata.device.ankle
+    exoMomentArms(:,3) = input.phase.parameter(:,input.auxdata.device.ankle);
+    if input.auxdata.numDeviceDOFs > 1
+        aD_ankle = aD(:,input.auxdata.device.ankle);
     else
         aD_ankle = aD;
     end

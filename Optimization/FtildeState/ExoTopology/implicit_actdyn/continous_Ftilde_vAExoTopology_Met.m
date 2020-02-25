@@ -1,4 +1,4 @@
-function phaseout = continous_Ftilde_vAExoTopology_Met_Act(input)
+function phaseout = continous_Ftilde_vAExoTopology_Met(input)
 
 % Get input data
 auxdata         = input.auxdata;
@@ -17,7 +17,7 @@ T_exp           = splinestruct.ID;
 vA      = 100*input.phase.control(:,1:NMuscles);
 aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-aD      = input.phase.control(:,end-(auxdata.numActiveDOFs-1):end);
+aD      = input.phase.control(:,end-(auxdata.numDeviceDOFs-1):end);
 
 % Get states
 a      = input.phase.state(:,1:NMuscles);
@@ -33,26 +33,26 @@ exoMomentArms = zeros(numColPoints,3);
 aD_hip = zeros(numColPoints,1);
 aD_knee = zeros(numColPoints,1);
 aD_ankle = zeros(numColPoints,1);
-if auxdata.active.hip
-    exoMomentArms(:,1) = parameter(:,auxdata.active.hip);
-    if auxdata.numActiveDOFs > 1
-        aD_hip = aD(:,auxdata.active.hip);
+if auxdata.device.hip
+    exoMomentArms(:,1) = parameter(:,auxdata.device.hip);
+    if auxdata.numDeviceDOFs > 1
+        aD_hip = aD(:,auxdata.device.hip);
     else
         aD_hip = aD;
     end
 end
-if auxdata.active.knee
-    exoMomentArms(:,2) = parameter(:,auxdata.active.knee);
-    if auxdata.numActiveDOFs > 1
-        aD_knee = aD(:,auxdata.active.knee);
+if auxdata.device.knee
+    exoMomentArms(:,2) = parameter(:,auxdata.device.knee);
+    if auxdata.numDeviceDOFs > 1
+        aD_knee = aD(:,auxdata.device.knee);
     else
         aD_knee = aD;
     end
 end
-if auxdata.active.ankle
-    exoMomentArms(:,3) = parameter(:,auxdata.active.ankle);
-    if auxdata.numActiveDOFs > 1
-        aD_ankle = aD(:,auxdata.active.ankle);
+if auxdata.device.ankle
+    exoMomentArms(:,3) = parameter(:,auxdata.device.ankle);
+    if auxdata.numDeviceDOFs > 1
+        aD_ankle = aD(:,auxdata.device.ankle);
     else
         aD_ankle = aD;
     end
