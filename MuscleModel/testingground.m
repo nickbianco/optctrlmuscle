@@ -210,6 +210,35 @@ for i=0:stateNames_os.size()-1
 end
 
 % now need to get the muscle length, velocity, and force in the muscle... etc. 
+outputPaths = StdVectorString()
+outputPaths.add('<component_path>|<output_name>')
+% Add more paths to outputPaths here
+
+% outputTable is TimeSeriesTable with time vector equal to the MocoTrajectory
+outputTable = study.analyze(solution, outputPaths)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+outputPaths = StdVectorString()
+outputPaths.add('/forceset/soleus_r\|fiber_velocity')
+outputPaths.add('/forceset/soleus_r\|normalized_fiber_velocity')
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+outputPaths = StdVectorString()
+outputPaths.add('.*fiber_velocity')
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% actual stuff
+musclesApoorva = model.getMuscles();
+probeSet = model.getProbeSet();
+probe = probeSet.get('metabolic_power');
+probeUmberger = Umberger2010MuscleMetabolicsProbe.safeDownCast(probe);
+
+rho = 1059.7; % Muscle density [kg/m^3]
+
+
+
 
 
 
