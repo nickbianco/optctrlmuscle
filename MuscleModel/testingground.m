@@ -209,6 +209,25 @@ for i=0:stateNames_os.size()-1
     stateNames = [stateNames, stateNames_os.get(i)];
 end
 
+numMuscles = model.getNumMuscleStates();
+
+lMT = NaN(numColPoints, numMuscles);
+% need a way to get the length of the muscles
+
+
+
+
+% Metabolic cost
+musclesApoorva = model.getMuscles();
+probeSet = model.getProbeSet();
+probe = probeSet.get('metabolic_power');
+probeUmberger = Umberger2010MuscleMetabolicsProbe.safeDownCast(probe);
+rho = 1059.7; % Muscle density [kg/m^3]
+
+
+
+
+
 % now need to get the muscle length, velocity, and force in the muscle... etc. 
 outputPaths = StdVectorString()
 outputPaths.add('<component_path>|<output_name>')
