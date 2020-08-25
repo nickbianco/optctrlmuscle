@@ -78,25 +78,17 @@ for p = 1:input.auxdata.numPhases
     % OBJECTIVE FUNCTION
     costMuscles = fieldnames(terms);
     EMGdiff = zeros(numColPoints, length(costMuscles));
-%     emgScaleCount = 0;
+    actWeights = ones(numColPoints, length(MuscleNames));
     for m = 1:length(costMuscles)
         if isfield(terms.(costMuscles{m}), 'costs')
             muscIdx = find(contains(MuscleNames, costMuscles{m}));
-            
-            if isfield(paramIndices.(costMuscles{m}), 'emgScale')
-%                 idx = paramIndices.(costMuscles{m}).emgScale;
-%                 emgScale = parameters(1,idx);
-%                 emgScaleCount = emgScaleCount + 1;
-                emgScale = 0;
-            else
-                emgScale = 1;
-            end
-            
+           
             calibrationCosts = terms.(costMuscles{m}).costs;
             for c = 1:length(calibrationCosts)
                 switch calibrationCosts{c}
                     case 'emg'
-                        EMGdiff(:,m) = (e(:,muscIdx) - emgScale*EMG(:,muscIdx));
+                        EMGdiff(:,m) = (e(:,muscIdx) - EMG(:,muscIdx));
+                        actWeights(:,muscIdx) = 0.1;
                     case 'fiber_length'
                         error('Fiber length cost not currently supported.');
                     case 'fiber_velocity'
@@ -112,7 +104,7 @@ for p = 1:input.auxdata.numPhases
     phaseout(p).dynamics = [dadt dFtilde];
     w1 = 1000;
     wAct = 0.01;
-    phaseout(p).integrand = w1.*sum(aT.^2,2) + sum(EMGdiff.^2,2) + wAct*sum(a.^2,2); % + wParam*sum(param_dev,2);
+    phaseout(p).integrand = w1.*sum(aT.^2,2) + sum(EMGdiff.^2,2) + wAct*sum((actWeights.*a).^2,2); % + wParam*sum(param_dev,2);
     
 end
 

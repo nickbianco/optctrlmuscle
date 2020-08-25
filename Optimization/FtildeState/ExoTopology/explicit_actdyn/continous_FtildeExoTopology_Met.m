@@ -19,12 +19,11 @@ T_exp           = splinestruct.ID;
 e       = input.phase.control(:,1:NMuscles);
 aT      = input.phase.control(:,NMuscles+1:NMuscles+Ndof);
 dFtilde = 10*input.phase.control(:,NMuscles+Ndof+1:NMuscles+Ndof+NMuscles);
-eD      = input.phase.control(:,end-(auxdata.numDeviceDOFs-1):end);
+aD      = input.phase.control(:,end-(auxdata.numDeviceDOFs-1):end);
 
 % Get states
 a      = input.phase.state(:,1:NMuscles);
 Ftilde = input.phase.state(:,NMuscles+1:NMuscles+NMuscles);
-aD     = input.phase.state(:,NMuscles+NMuscles+1:end);
 
 
 % Convert parameters to the correct range
@@ -103,12 +102,9 @@ daDdt = ones(numColPoints,auxdata.numDeviceDOFs);
 for m = 1:NMuscles
     dadt(:,m) = ActivationDynamics(e(:,m),a(:,m),tauAct(m),tauDeact(m),input.auxdata.b);
 end
-for i = 1:auxdata.numDeviceDOFs
-   daDdt(:,i) = ActivationDynamics(eD(:,i),aD(:,i),0.01,0.01,input.auxdata.b);
-end
 
 % Contraction dynamics is implicit
-phaseout.dynamics = [dadt dFtilde daDdt];
+phaseout.dynamics = [dadt dFtilde];
 
 % OBJECTIVE FUNCTION
 % Calculate metabolic rate from Koelewijn et al. 2018 smooth approximation of
@@ -130,7 +126,7 @@ end
 w_Edot = 1/(NMuscles*input.auxdata.model_mass);
 w_Res = 1e3/Ndof;
 % w_Control = 1/(3*NMuscles);
-% w_Reg = auxdata.regularizationWeight/(NMuscles + auxdata.numDeviceDOFs + Ndof);
+w_Reg = auxdata.regularizationWeight;
 
 % dFtilde_diff = [zeros(1, NMuscles); dFtilde(2:end,:) - dFtilde(1:end-1,:)];
 % e_diff = [zeros(1, NMuscles); e(2:end,:) - e(1:end-1,:)];
@@ -140,7 +136,6 @@ w_Res = 1e3/Ndof;
 % aD_diff = [zeros(1, auxdata.numDeviceDOFs); aD(2:end,:) - aD(1:end-1,:)];
 
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
-                     sum((dFtilde/10).^2,2)/NMuscles + sum(e.^2,2)/NMuscles + ...
-                     sum(a.^2,2)/NMuscles; %+ ...
-%                      w_Reg*(sum(Ftilde_diff.^2,2) + sum(aD_diff.^2,2) + sum(aT_diff.^2, 2)); 
+                     w_Reg*(sum((dFtilde/10).^2,2)/NMuscles + sum(e.^2,2)/NMuscles + ...
+                     sum(a.^2,2)/NMuscles); 
                         

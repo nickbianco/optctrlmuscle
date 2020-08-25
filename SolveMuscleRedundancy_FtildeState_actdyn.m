@@ -163,19 +163,9 @@ if strcmp(study{2},'Topology')
     if ~isfield(Misc, 'fixParams') || isempty(Misc.fixParams)
        Misc.fixParams = []; 
     end
-    % ExoTopology: option to set individual control signals for each DOF
-    if ~isfield(Misc, 'mult_controls') || isempty(Misc.mult_controls)
-       Misc.mult_controls = false; 
-    end
-    % ExoTopology: option to fix gains on experimental torque controls to be
-    % the same across DOFs
-    if ~isfield(Misc, 'same_torque_gain') || isempty(Misc.same_torque_gain)
-       Misc.same_torque_gain = false; 
-    end
-    % ExoTopology: shift prescribed exoskeleton torque peaks to match ID peaks
-    if ~isfield(Misc, 'shift_exo_peaks') || isempty(Misc.shift_exo_peaks)
-       Misc.shift_exo_peaks = false;
-       auxdata.shift_exo_peaks = false;
+    % ExoTopology: option to couple control signals between DOFs
+    if ~isfield(Misc, 'coupledControl') || isempty(Misc.coupledControl)
+       Misc.coupledControl = false; 
     end
 end
 
@@ -183,7 +173,7 @@ end
 % Check that options are being specified correctly -----------------------%
 if ~strcmp(study{2},'Topology')
     exoFlags = {'deviceDOFs','fixMomentArms', 'fixParams', ...
-        'mult_controls', 'same_torque_gain', 'shift_exo_peaks', 'paramGuess'};
+        'coupledControl', 'paramGuess'};
     
     for i = 1:length(exoFlags) 
         errmsg = [study{2} ': flag ' exoFlags{i} ' unused'];
@@ -371,7 +361,7 @@ if strcmp(study{2}, 'Topology')
                             end
                     end
                 else
-                    assert(Misc.mult_controls, ...
+                    assert(~Misc.coupledControl, ...
                        'Cannot use bidirectional actuators in coupled control.');
                     isBidirectional(numExoParams) = 1;
                 end
@@ -408,7 +398,8 @@ if strcmp(study{2}, 'Topology')
                             end
                     end
                 else
-                    assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                    assert(~Misc.coupledControl, ...
+                        'Cannot use bidirectional actuators in coupled control.');
                     isBidirectional(numExoParams) = 1;
                 end
             case 'ankle'
@@ -444,12 +435,13 @@ if strcmp(study{2}, 'Topology')
                             end
                     end
                 else
-                    assert(Misc.mult_controls, 'Cannot use bidirectional actuators in coupled control.');
+                    assert(~Misc.coupledControl, ...
+                        'Cannot use bidirectional actuators in coupled control.');
                     isBidirectional(numExoParams) = 1;
                 end
         end
     end
-    if Misc.mult_controls
+    if ~Misc.coupledControl
         auxdata.numDeviceDOFs = numExoParams;
     end
     
@@ -460,10 +452,6 @@ if strcmp(study{2}, 'Topology')
     auxdata.paramsLower = paramsLower;
     auxdata.paramsUpper = paramsUpper;
     auxdata.isBidirectional = isBidirectional;
-    
-    % Pass whether or not exoskeleton torques should be shifted based on 
-    % net joint moment timings
-    auxdata.shift_exo_peaks = Misc.shift_exo_peaks;
     
     auxdata.hip_DOF = strmatch('hip_flexion',DatStore.DOFNames);
     auxdata.knee_DOF = strmatch('knee_angle',DatStore.DOFNames);
@@ -547,14 +535,14 @@ dFMin = dF_min*ones(1,auxdata.NMuscles);
 dFMax = dF_max*ones(1,auxdata.NMuscles);
 aTmin = -1*ones(1,auxdata.Ndof); 
 aTmax = 1*ones(1,auxdata.Ndof);
-aDmin = zeros(1, auxdata.numDeviceDOFs); 
-aDmax = ones(1, auxdata.numDeviceDOFs);
-for i = 1:auxdata.numDeviceDOFs
-    if auxdata.isBidirectional(i) 
-       aDmin(i) = -1; 
-    end
-end
 if strcmp(study{2},'Topology')
+    aDmin = zeros(1, auxdata.numDeviceDOFs); 
+    aDmax = ones(1, auxdata.numDeviceDOFs);
+    for i = 1:auxdata.numDeviceDOFs
+        if auxdata.isBidirectional(i)
+            aDmin(i) = -1;
+        end
+    end
     control_bounds_lower = [umin aTmin dFMin aDmin];
     control_bounds_upper = [umax aTmax dFMax aDmax];
 else
@@ -576,12 +564,12 @@ Ffmax = F_max*ones(1,auxdata.NMuscles);
 FMin = F_min*ones(1,auxdata.NMuscles);
 FMax = F_max*ones(1,auxdata.NMuscles);
 if strcmp(study{2}, 'Topology')
-    bounds.phase.initialstate.lower = [actMin, F0min, aDmin];
-    bounds.phase.initialstate.upper = [actMax, F0max, aDmax];
-    bounds.phase.state.lower = [actMin, FMin, aDmin];
-    bounds.phase.state.upper = [actMax, FMax, aDmax];
-    bounds.phase.finalstate.lower = [actMin, Ffmin, aDmin];
-    bounds.phase.finalstate.upper = [actMax, Ffmax, aDmax];
+    bounds.phase.initialstate.lower = [actMin, F0min,];
+    bounds.phase.initialstate.upper = [actMax, F0max];
+    bounds.phase.state.lower = [actMin, FMin];
+    bounds.phase.state.upper = [actMax, FMax];
+    bounds.phase.finalstate.lower = [actMin, Ffmin];
+    bounds.phase.finalstate.upper = [actMax, Ffmax];
 else
     bounds.phase.initialstate.lower = [actMin, F0min];
     bounds.phase.initialstate.upper = [actMax, F0max];
@@ -621,13 +609,14 @@ end
 
 % Eventgroup
 % Impose mild periodicity
-pera_lower = -1 * ones(1, auxdata.NMuscles);
-pera_upper = 1 * ones(1, auxdata.NMuscles);
-perFtilde_lower = -1*ones(1,auxdata.NMuscles);
-perFtilde_upper = 1*ones(1,auxdata.NMuscles);
+periodcity = 1;
+pera_lower = -periodcity * ones(1, auxdata.NMuscles);
+pera_upper = periodcity * ones(1, auxdata.NMuscles);
+perFtilde_lower = -periodcity * ones(1,auxdata.NMuscles);
+perFtilde_upper = periodcity * ones(1,auxdata.NMuscles);
 if strcmp(study{2},'Topology')
-    bounds.eventgroup.lower = [pera_lower perFtilde_lower -0.1*ones(1, auxdata.numDeviceDOFs)];
-    bounds.eventgroup.upper = [pera_upper perFtilde_upper 0.1*zeros(1, auxdata.numDeviceDOFs)];
+    bounds.eventgroup.lower = [pera_lower perFtilde_lower];
+    bounds.eventgroup.upper = [pera_upper perFtilde_upper];
 else
     bounds.eventgroup.lower = [pera_lower perFtilde_lower];
     bounds.eventgroup.upper = [pera_upper perFtilde_upper];
@@ -668,11 +657,15 @@ guess.phase.control = control_guess;
 if strcmp(study{2}, 'Topology') 
     a_guess = unassisted.MActivation;
     F_guess = unassisted.TForcetilde;
+    aD_guess = 0.1*ones(size(a_guess,1), auxdata.numDeviceDOFs);
+    state_guess = [a_guess F_guess];
 else
     a_guess = 0.1*ones(N,auxdata.NMuscles);
     F_guess = 0.1*ones(N,auxdata.NMuscles); 
+    state_guess = [a_guess F_guess];
 end
-guess.phase.state =  [a_guess F_guess];
+
+guess.phase.state = state_guess;
 
 % Integral guess
 if strcmp(study{2}, 'Topology') 
@@ -818,6 +811,11 @@ setup.adigatorhes.endpoint   = str2func([continuous tag 'ADiGatorHes']);
 % ----------------------------------------------------------------------- %
 % ----------------------------------------------------------------------- %
 
+setup.auxdata.regularizationWeight = 1;
+regOutput = gpops2(setup);
+
+setup.auxdata.regularizationWeight = 1e-2;
+setup.guess = regOutput.result.solution;
 output = gpops2(setup);
 
 MuscleNames = DatStore.MuscleNames;
@@ -842,6 +840,7 @@ mat.Time = Time;
 mat.DatStore = DatStore;
 mat.OptInfo = OptInfo;
 mat.MuscleNames = MuscleNames;
+
 
 [UmbergerKoelewijn2018, MinettiAlexander1997] = ...
         calcWholeBodyMetabolicRate(model, mat);

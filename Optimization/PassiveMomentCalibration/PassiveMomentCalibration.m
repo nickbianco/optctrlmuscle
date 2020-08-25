@@ -59,8 +59,8 @@ auxdata.indices = indices;
 % Set up calibration optimization problem
 numParams = numlMo + numlTs + nume0;
 x0 = ones(numParams, 1);
-lb = 0.95*x0;
-ub = 1.05*x0;
+lb = 0.75*x0;
+ub = 1.25*x0;
 
 options = optimoptions('fmincon', ...
                        'Display','iter', ...
@@ -87,8 +87,8 @@ options = optimoptions('fmincon', ...
 % e0: [0.5 0.7]     --> m = 0.4, b = 0.2
 
 
-m = 3.0;
-b = -2.25;
+m = 2.8;
+b = -1.5;
 auxdata.e0LinCoefs.m = m;
 auxdata.e0LinCoefs.b = b;
  
@@ -172,7 +172,7 @@ Tdiff = M_nz - Tmuscs_nz;
 
 % Return scalar objective: match moments with minimal deviations from default
 % parameters
-f = sum(Tdiff(:).^2) + 1000*sum((x-1).^2);
+f = sum(Tdiff(:).^2) + 100*sum((x-1).^2);
 
 end
 

@@ -45,14 +45,6 @@ if auxdata.device.ankle
     else
         aD_ankle = aD;
     end
-    if auxdata.shift_exo_peaks
-        T_hip_ref = sign(exoMomentArms(1,1))*T_exp(:,auxdata.hip_DOF);
-        T_ankle_ref = sign(exoMomentArms(1,3))*T_exp(:,auxdata.ankle_DOF);
-        [~,hipIdx] = max(T_hip_ref);
-        [~,ankleIdx] = max(T_ankle_ref);
-        shift_factor = ankleIdx - hipIdx;
-        aD_ankle = ShiftCurve(aD_ankle, shift_factor);
-    end 
 end
 MomentArms_Act = exoMomentArms(1,:);
 

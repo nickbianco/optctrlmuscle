@@ -457,38 +457,13 @@ if strcmp(study{1}, 'ParameterCalibration')
         paramsToCalibrate = Misc.parameterCalibrationTerms.(musclesToCalibrate{m}).params;
         for pp = 1:length(paramsToCalibrate)
             if strcmp(paramsToCalibrate{pp}, 'muscle_strain')
-%                 preCalVal = auxdata.params(7,muscIdx);
-%                 params_lower = [params_lower 1.0];
-%                 params_upper = [params_upper 5/3];
                 continue;
             elseif strcmp(paramsToCalibrate{pp}, 'optimal_fiber_length')
-                preCalVal = auxdata.params(9,muscIdx);
-%                 if 0.9*preCalVal < 0.9
-%                     paramLower = 0.9;
-%                 else
-%                     paramLower = 0.9*preCalVal;
-%                 end
-%                 if 1.1*preCalVal > 1.1
-%                     paramUpper = 1.1;
-%                 else
-%                     paramUpper = 1.1*preCalVal;
-%                 end
-%                 
+                preCalVal = auxdata.params(9,muscIdx);               
                 params_lower = [params_lower 0.75];
                 params_upper = [params_upper 1.25];
             elseif strcmp(paramsToCalibrate{pp}, 'tendon_slack_length')
                 preCalVal = auxdata.params(10,muscIdx);
-%                 if 0.9*preCalVal < 0.9
-%                     paramLower = 0.9;
-%                 else
-%                     paramLower = 0.9*preCalVal;
-%                 end
-%                 if 1.1*preCalVal > 1.1
-%                     paramUpper = 1.1;
-%                 else
-%                     paramUpper = 1.1*preCalVal;
-%                 end
-                
                 params_lower = [params_lower 0.75];
                 params_upper = [params_upper 1.25];
             end
@@ -503,12 +478,7 @@ if strcmp(study{1}, 'ParameterCalibration')
     muscsWithEMG = {'med_gas_r','glut_max2_r','rect_fem_r','semimem_r','soleus_r','tib_ant_r','vas_int_r'};
     for m = 1:length(emgCostMuscles)
         if ~any(strcmp(muscsWithEMG, emgCostMuscles{m}))
-%             params_lower = [params_lower 0];
-%             params_upper = [params_upper 10];
-%             params_guess = [params_guess 1];
-            
             parameterCalibrationIndices.(emgCostMuscles{m}).emgScale = 1;
-%             index = index + 1;
         end
     end
     
@@ -569,14 +539,19 @@ for p = 1:numPhases
                     endIdx = endIdx+1;
                 end
             end
-            startTime = emg.time(startIdx);
-            endTime = emg.time(endIdx);
+%             startTime = emg.time(startIdx);
+%             endTime = emg.time(endIdx);
             for m = 1:length(emgCostMuscles)
-                muscleEMG = emg.(musc_map(emgCostMuscles{m}));
-                delayTime = linspace(startTime, endTime, 1000*(endTime-startTime));
-                emgDelayInterp = interp1(emg.time(startIdx:endIdx), muscleEMG(startIdx:endIdx), delayTime);
-                emgDelayInterpShifted = circshift(emgDelayInterp, 40);
-                emgMuscInterp = interp1(delayTime, emgDelayInterpShifted, DatStore(p).time);
+                muscleEMG = emg.(musc_map(emgCostMuscles{m}))(startIdx:endIdx);
+                emgPeak = max(muscleEMG);
+                scale = emgPeak / (emgPeak - 0.05);
+                emgTime = emg.time(startIdx:endIdx);
+                muscleEMGrescaled = scale * (muscleEMG - 0.05);
+%                 delayTime = linspace(startTime, endTime, 1000*(endTime-startTime));
+%                 emgDelayInterp = interp1(emg.time(startIdx:endIdx), muscleEMG(startIdx:endIdx), delayTime);
+%                 emgDelayInterpShifted = circshift(emgDelayInterp, 40);
+%                 emgMuscInterp = interp1(delayTime, emgDelayInterpShifted, DatStore(p).time);
+                emgMuscInterp = interp1(emgTime, muscleEMGrescaled, DatStore(p).time);
                 muscIdx = find(contains(auxdata.MuscleNames, emgCostMuscles{m}));
                 interpEMGToSpline(:,muscIdx) = emgMuscInterp;
             end
