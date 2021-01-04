@@ -125,17 +125,9 @@ end
 
 w_Edot = 1/(NMuscles*input.auxdata.model_mass);
 w_Res = 1e3/Ndof;
-% w_Control = 1/(3*NMuscles);
 w_Reg = auxdata.regularizationWeight;
 
-% dFtilde_diff = [zeros(1, NMuscles); dFtilde(2:end,:) - dFtilde(1:end-1,:)];
-% e_diff = [zeros(1, NMuscles); e(2:end,:) - e(1:end-1,:)];
-% Ftilde_diff = [zeros(1, NMuscles); Ftilde(2:end,:) - Ftilde(1:end-1,:)];
-% a_diff = [zeros(1, NMuscles); a(2:end,:) - a(1:end-1,:)];
-% aT_diff = [zeros(1, Ndof); aT(2:end,:) - aT(1:end-1,:)];
-% aD_diff = [zeros(1, auxdata.numDeviceDOFs); aD(2:end,:) - aD(1:end-1,:)];
-
 phaseout.integrand = w_Edot*sum(Edot, 2) + w_Res*sum(aT.^2,2) + ...
-                     w_Reg*(sum((dFtilde/10).^2,2)/NMuscles + sum(e.^2,2)/NMuscles + ...
-                     sum(a.^2,2)/NMuscles); 
+                     w_Reg*(sum((dFtilde/10).^2,2)/NMuscles + 10*sum(e.^2,2)/NMuscles + ...
+                            sum(a.^2,2)/NMuscles); 
                         

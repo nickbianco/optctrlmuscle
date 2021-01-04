@@ -110,6 +110,10 @@ end
 if ~isfield(Misc,'Mesh_Frequency') || isempty(Misc.Mesh_Frequency)
    Misc.Mesh_Frequency=100;
 end
+% Tolerance
+if ~isfield(Misc,'tolerance') || isempty(Misc.tolerance)
+   Misc.tolerance = 1e-3; 
+end
 % Activation dynamics ('explicit' or 'implicit')
 if ~isfield(Misc,'actdyn') || isempty(Misc.actdyn)
    Misc.actdyn = 'explicit';          
@@ -702,7 +706,7 @@ setup.bounds = bounds;
 setup.guess = guess;
 setup.nlp.solver = 'ipopt';
 setup.nlp.ipoptoptions.linear_solver = 'ma57';
-setup.nlp.ipoptoptions.tolerance = 1e-3;
+setup.nlp.ipoptoptions.tolerance = Misc.tolerance;
 setup.nlp.ipoptoptions.maxiterations = 10000;
 setup.derivatives.supplier = 'sparseCD';
 setup.derivatives.derivativelevel = 'first';
@@ -710,9 +714,9 @@ setup.derivatives.dependencies = 'sparse';
 setup.scales.method = 'none';
 setup.mesh.method = 'hp-PattersonRao';
 setup.mesh.tolerance = 1e-3;
-setup.mesh.maxiterations = 0;
+setup.mesh.maxiterations = 5;
 setup.mesh.colpointsmin = 5;
-setup.mesh.colpointsmax = 10;
+setup.mesh.colpointsmax = 20;
 setup.method = 'RPM-integration';
 setup.displaylevel = 2;
 NMeshIntervals = round((tf-t0)*Misc.Mesh_Frequency);
@@ -770,7 +774,7 @@ elseif ispc
     emptyVar = [];
     save(pathLock, 'emptyVar')
     
-    % Perform serialzied task
+    % Perform serialized task
     tdummy = guess.phase.time;
     splinestruct = SplineInputData(tdummy,input);
     splinenames = fieldnames(splinestruct);
@@ -812,9 +816,11 @@ setup.adigatorhes.endpoint   = str2func([continuous tag 'ADiGatorHes']);
 % ----------------------------------------------------------------------- %
 
 setup.auxdata.regularizationWeight = 1;
+% setup.nlp.ipoptoptions.tolerance = 1e-3;
 regOutput = gpops2(setup);
 
 setup.auxdata.regularizationWeight = 1e-2;
+% setup.nlp.ipoptoptions.tolerance = 1e-3;
 setup.guess = regOutput.result.solution;
 output = gpops2(setup);
 
@@ -840,7 +846,6 @@ mat.Time = Time;
 mat.DatStore = DatStore;
 mat.OptInfo = OptInfo;
 mat.MuscleNames = MuscleNames;
-
 
 [UmbergerKoelewijn2018, MinettiAlexander1997] = ...
         calcWholeBodyMetabolicRate(model, mat);

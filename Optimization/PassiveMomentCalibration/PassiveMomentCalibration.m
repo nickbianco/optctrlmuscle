@@ -85,10 +85,12 @@ options = optimoptions('fmincon', ...
 % e0: [0.55 0.65]   --> m = 0.2, b = 0.4
 % e0: [0.525 0.675] --> m = 0.3, b = 0.3
 % e0: [0.5 0.7]     --> m = 0.4, b = 0.2
+% e0: [0.6 1.5]     --> m = 1.8, b = -0.75
+% e0: [0.6 2.0]     --> m = 2.8, b = -1.5
+% e0: [0.8 2.0]     --> m = 2.4, b = -1.0
 
-
-m = 2.8;
-b = -1.5;
+m = 2.4;
+b = -1.0;
 auxdata.e0LinCoefs.m = m;
 auxdata.e0LinCoefs.b = b;
  
@@ -124,7 +126,7 @@ end
 
 function plotMuscle(m, x, lMT, auxdata, DatStore)
 
-[~, auxdata] = getForce(x, lMT, auxdata, true);
+[~, ~, auxdata] = getForce(x, lMT, auxdata, true);
 [FT, Fpe, lMtilde, cos_alpha] = getForceRigidTendon(lMT, auxdata.params);
 
 mname = DatStore.MuscleNames{m}
@@ -151,8 +153,13 @@ end
 
 function [f] = obj(x, M, B, lMT, auxdata, isRigidTendon)
 
+indices = auxdata.indices;
+numlMo = indices.numlMo;
+numlTs = indices.numlTs;
+nume0 = indices.nume0;
+
 % Get force along tendon
-[FT,~] = getForce(x, lMT, auxdata, isRigidTendon);
+[FT,Fpe,~] = getForce(x, lMT, auxdata, isRigidTendon);
 
 % Compute muscle moments
 Tmuscs = zeros(size(M));
@@ -172,7 +179,8 @@ Tdiff = M_nz - Tmuscs_nz;
 
 % Return scalar objective: match moments with minimal deviations from default
 % parameters
-f = sum(Tdiff(:).^2) + 100*sum((x-1).^2);
+f = sum(Tdiff(:).^2) + 1e-3*sum(Fpe(:).^2) + ... 
+    1e6*(sum((x(1:(numlMo+numlTs))-1).^2) + sum((x((numlMo+numlTs+1):(numlMo+numlTs+nume0))-0.75).^2));
 
 end
 
@@ -218,13 +226,14 @@ c(c>1000) = 1;
 
 end
 
-function [FT, auxdata] = getForce(x, lMT, auxdata, isRigidTendon)
+function [FT, Fpe, auxdata] = getForce(x, lMT, auxdata, isRigidTendon)
 
 auxdata = updateParams(x, auxdata);
 
 % Passive moment matching objective term
+Fpe = 0;
 if isRigidTendon
-    [FT,~,~,~] = getForceRigidTendon(lMT, auxdata.params);
+    [FT,Fpe,~,~] = getForceRigidTendon(lMT, auxdata.params);
 else
     FT = getForceCompliantTendon(lMT, auxdata.params, auxdata.Fpparam);
 end
@@ -422,19 +431,19 @@ function [M] = createMomentArray(M_Silder2007)
 
 % Remove high knee flexion and high hip flexion angle from hip moment matching
 M_Silder2007{1} = reshape(M_Silder2007{1},numel(M_Silder2007{1})/4,4);
-M_Silder2007{1}(:,4) = [];
-M_Silder2007{1}(85:96,:) = [];
+% M_Silder2007{1}(:,4) = [];
+% M_Silder2007{1}(85:96,:) = [];
 M_Silder2007{1} = M_Silder2007{1}(:);
 
 % Remove high knee flexion from knee moment matching
 M_Silder2007{2} = reshape(M_Silder2007{2},numel(M_Silder2007{2})/4,4);
-M_Silder2007{2}(92:121,:) = [];
+% M_Silder2007{2}(92:121,:) = [];
 % M_Silder2007{2}(:,4) = [];
 M_Silder2007{2} = M_Silder2007{2}(:);
 
 % Remove high knee flexion from ankle moment matching
 M_Silder2007{3} = reshape(M_Silder2007{3},numel(M_Silder2007{3})/4,4);
-M_Silder2007{3}(:,1) = [];
+% M_Silder2007{3}(:,1) = [];
 M_Silder2007{3} = M_Silder2007{3}(:);
 
 % Combine the passive moments
@@ -450,19 +459,19 @@ function [q, u] = createJointAngleVelocityArrays(q_Silder2007, allCoords)
 
 % Remove high knee flexion and high hip flexion angle from hip moment matching
 q_Silder2007{1} = reshape(q_Silder2007{1},numel(q_Silder2007{1})/(4*6),4,6);
-q_Silder2007{1}(:,4,:) = [];
-q_Silder2007{1}(85:96,:,:) = [];
+% q_Silder2007{1}(:,4,:) = [];
+% q_Silder2007{1}(85:96,:,:) = [];
 q_Silder2007{1} = reshape(q_Silder2007{1},numel(q_Silder2007{1})/(6),6);
 
 % Remove high knee flexion from knee moment matching
 q_Silder2007{2} = reshape(q_Silder2007{2},numel(q_Silder2007{2})/(4*6),4,6);
-q_Silder2007{2}(92:121,:,:) = [];
+% q_Silder2007{2}(92:121,:,:) = [];
 % q_Silder2007{2}(:,4,:) = [];
 q_Silder2007{2} = reshape(q_Silder2007{2},numel(q_Silder2007{2})/(6),6);
 
 % Remove high knee flexion from ankle moment matching
 q_Silder2007{3} = reshape(q_Silder2007{3},numel(q_Silder2007{3})/(4*6),4,6);
-q_Silder2007{3}(:,1,:) = [];
+% q_Silder2007{3}(:,1,:) = [];
 q_Silder2007{3} = reshape(q_Silder2007{3},numel(q_Silder2007{3})/(6),6);
 
 % Combine the joint angles
